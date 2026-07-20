@@ -1,0 +1,58 @@
+{
+  "name": "@villanelle/ret-shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./contracts": {
+      "types": "./dist/contracts/index.d.ts",
+      "default": "./dist/contracts/index.js"
+    },
+    "./contracts/log-redaction": {
+      "types": "./dist/contracts/log-redaction.d.ts",
+      "default": "./dist/contracts/log-redaction.js"
+    },
+    "./contracts/envelope.helpers": {
+      "types": "./dist/contracts/envelope.helpers.d.ts",
+      "default": "./dist/contracts/envelope.helpers.js"
+    },
+    "./contracts/base": {
+      "types": "./dist/contracts/base/index.d.ts",
+      "default": "./dist/contracts/base/index.js"
+    },
+    "./config": {
+      "types": "./dist/config/index.d.ts",
+      "default": "./dist/config/index.js"
+    },
+    "./domain": {
+      "types": "./dist/domain/index.d.ts",
+      "default": "./dist/domain/index.js"
+    },
+    "./application": {
+      "types": "./dist/application/index.d.ts",
+      "default": "./dist/application/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --pool=threads --maxWorkers=1",
+    "test:coverage": "vitest run --pool=threads --maxWorkers=1 --coverage.enabled --coverage.provider=v8 --coverage.reporter=text-summary --coverage.reporter=json-summary --coverage.reportsDirectory=../coverage/shared",
+    "lint": "eslint \"src/**/*.{ts,tsx,js,jsx,mts,cts,mjs,cjs}\" --max-warnings=0"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "4.0.18",
+    "jsdom": "27.2.0",
+    "typescript": "5.7.3",
+    "vitest": "^4.0.18"
+  }
+}

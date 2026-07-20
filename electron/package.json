@@ -1,0 +1,44 @@
+{
+  "name": "@villanelle/ret-electron",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "prebuild": "pnpm -w --filter @villanelle/ret-shared build",
+    "build": "tsc -p tsconfig.json",
+    "dev": "pnpm -w --filter @villanelle/ret-shared build && pnpm build && electron dist/main.js",
+    "prepackage": "pnpm -w --filter @villanelle/ret-shared build && pnpm -w --filter @villanelle/ret-frontend build:electron && pnpm build",
+    "package:dir": "pnpm prepackage && electron-builder --dir --config electron-builder.yml",
+    "package:win": "pnpm prepackage && electron-builder --config electron-builder.portable.yml",
+    "package:win:nsis": "pnpm prepackage && electron-builder --config electron-builder.nsis.yml",
+    "package:win:all": "pnpm prepackage && electron-builder --config electron-builder.portable.yml && electron-builder --config electron-builder.nsis.yml",
+    "pretypecheck": "pnpm -w --filter @villanelle/ret-shared build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint \"**/*.{ts,tsx,js,jsx,mts,cts,mjs,cjs}\" --max-warnings=0",
+    "pretest": "pnpm -w --filter @villanelle/ret-shared build",
+    "test": "vitest run --passWithNoTests ipc/__tests__ __tests__ --pool=threads --maxWorkers=1",
+    "test:coverage": "vitest run --passWithNoTests ipc/__tests__ __tests__ --pool=threads --maxWorkers=1 --coverage.enabled --coverage.provider=v8 --coverage.reporter=text-summary --coverage.reporter=json-summary --coverage.reportsDirectory=../coverage/electron",
+    "pretest:e2e": "pnpm -w --filter @villanelle/ret-shared build && pnpm -w --filter @villanelle/ret-frontend build:electron && pnpm build",
+    "test:e2e": "playwright test -c playwright.e2e.config.ts"
+  },
+  "dependencies": {
+    "@villanelle/ret-shared": "workspace:*",
+    "argon2": "^0.44.0",
+    "sqlite3": "^5.1.7",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/node": "20.12.5",
+    "@types/sqlite3": "^3.1.11",
+    "@vitest/coverage-v8": "4.0.18",
+    "electron": "^40.6.1",
+    "electron-builder": "^26.0.12",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^4.0.18"
+  },
+  "main": "dist/main.js",
+  "description": "Ret desktop application",
+  "author": "Ret Team"
+}

@@ -1,0 +1,64 @@
+
+@font-face {
+    font-family: "NotoSansSC";
+    src: url("./fonts/NotoSansSC-Black.ttf") format("truetype");
+    font-weight: 900; /* 字体权重 */
+    font-display: swap; /* 使字体快速显示 */
+  }
+  
+  @font-face {
+    font-family: "NotoSansSC";
+    src: url("./fonts/NotoSansSC-ExtraBold.ttf") format("truetype");
+    font-weight: 800; /* 字体权重 */
+    font-display: swap; /* 使字体快速显示 */
+  }
+  
+  @font-face {
+    font-family: "NotoSansSC";
+    src: url("../fonts/NotoSansSC-Bold.ttf") format("truetype");
+    font-weight: 700; /* 字体权重 */
+    font-display: swap; /* 使字体快速显示 */
+  }
+  
+  @font-face {
+    font-family: "NotoSansSC";
+    src: url("./fonts/NotoSansSC-SemiBold.ttf") format("truetype");
+    font-weight: 600; /* 字体权重 */
+    font-display: swap; /* 使字体快速显示 */
+  }
+  
+  @font-face {
+    font-family: "NotoSansSC";
+    src: url("./fonts/NotoSansSC-Medium.ttf") format("truetype");
+    font-weight: 500; /* 字体权重 */
+    font-display: swap; /* 使字体快速显示 */
+  }
+  
+  @font-face {
+    font-family: "NotoSansSC";
+    src: url("./fonts/NotoSansSC-Regular.ttf") format("truetype");
+    font-weight: 400; /* 字体权重 */
+    font-display: swap; /* 使字体快速显示 */
+  }
+  
+  @font-face {
+    font-family: "NotoSansSC";
+    src: url("./fonts/NotoSansSC-Light.ttf") format("truetype");
+    font-weight: 300; /* 字体权重 */
+    font-display: swap; /* 使字体快速显示 */
+  }
+  
+  @font-face {
+    font-family: "NotoSansSC";
+    src: url("./fonts/NotoSansSC-ExtraLight.ttf") format("truetype");
+    font-weight: 200; /* 字体权重 */
+    font-display: swap; /* 使字体快速显示 */
+  }
+  
+  @font-face {
+    font-family: "NotoSansSC";
+    src: url("./fonts/NotoSansSC-Thin.ttf") format("truetype");
+    font-weight: 100; /* 字体权重 */
+    font-display: swap; /* 使字体快速显示 */
+  }
+  

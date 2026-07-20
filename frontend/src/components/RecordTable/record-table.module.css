@@ -1,0 +1,75 @@
+.container {
+  margin: 20px;
+  overflow-x: hidden;
+}
+.container :global(.ant-table-empty .ant-table-content table) {
+  width: 100% !important;
+}
+@media screen and (max-width: 1200px) {
+  .container {
+    width: 100% !important;
+  }
+}
+.record_table {
+  margin: 24px 0 0 10px;
+  flex: 1;
+  /* z-index: -1; */
+}
+.deletedRow {
+  background-color: #f0f0f0;
+  color: #b0b0b0;
+}
+:global(.deleted-row),
+:global(.deleted-row) .ant-table-cell,
+:global(.deleted-row) .ant-table-selection-column,
+:global(.deleted-row) .ant-table-cell-fix-left,
+:global(.deleted-row) .ant-table-cell-fix-right,
+:global(.deleted-row) td,
+:global(.deleted-row) th,
+:global(.deleted-row) .ant-table-selection-column .ant-checkbox-wrapper {
+  background-color: #f0f0f0 !important;
+  color: #b0b0b0 !important;
+}
+:global(.deleted-row) .ant-typography,
+:global(.deleted-row) .ant-typography * ,
+:global(.deleted-row) .ant-tag,
+:global(.deleted-row) .ant-tag * {
+  color: inherit !important;
+}
+:global(.deleted-row) td {
+  text-decoration: line-through;
+  text-decoration-color: #000;
+}
+:global(.deleted-row) td.noStrike {
+  text-decoration: none;
+}
+.noStrike,
+.noStrike * {
+  text-decoration: none !important;
+}
+.descriptionDeleted :global(.ant-descriptions-item-label),
+.descriptionDeleted :global(.ant-descriptions-item-content),
+.descriptionDeleted :global(.ant-typography),
+.descriptionDeleted :global(.ant-typography *),
+.descriptionDeleted :global(.ant-tag),
+.descriptionDeleted :global(.ant-tag *) {
+  text-decoration: line-through;
+  text-decoration-color: #000;
+}
+:global(.description-deleted) .ant-descriptions-item-label,
+:global(.description-deleted) .ant-descriptions-item-content,
+:global(.description-deleted) .ant-typography,
+:global(.description-deleted) .ant-typography *,
+:global(.description-deleted) .ant-tag,
+:global(.description-deleted) .ant-tag * {
+  text-decoration: line-through;
+  text-decoration-color: #000;
+}
+:global(.deleted-row) .noStrike .ant-btn,
+:global(.deleted-row) .noStrike .ant-btn-primary,
+:global(.deleted-row) .noStrike .ant-btn-default {
+  background-color: #f2f2f2 !important;
+  border-color: #dcdcdc !important;
+  color: #b0b0b0 !important;
+  box-shadow: none;
+}

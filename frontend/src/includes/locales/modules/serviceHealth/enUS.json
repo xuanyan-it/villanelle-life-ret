@@ -1,0 +1,6 @@
+{
+  "serviceHealth_checking_title": "Checking service availability",
+  "serviceHealth_checking_label": "Connecting to backend service...",
+  "serviceHealth_failed_title": "Backend service is unavailable",
+  "serviceHealth_failed_label": "Please start the web-server and try again."
+}

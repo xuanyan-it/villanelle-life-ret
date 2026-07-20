@@ -1,0 +1,9 @@
+export const triggerBlobDownload = (blob: Blob, filename: string): void => {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", filename);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};

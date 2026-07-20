@@ -1,0 +1,183 @@
+﻿name: Deploy via Docker Compose
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - test
+      - master
+
+concurrency:
+  group: docker-compose-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy_test:
+    if: |
+      (github.event_name == 'push' && github.ref_name == 'test') ||
+      (github.event_name == 'workflow_dispatch' && github.ref_name == 'test')
+    runs-on: [self-hosted, linux]
+    env:
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      # Used by server JWT cookie signing
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      NGINX_SSL_ENABLED: "false"
+      PIP_INDEX_URL: ${{ vars.PIP_INDEX_URL }}
+      DOCKER_BUILDKIT: "1"
+      COMPOSE_DOCKER_CLI_BUILD: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Postgres host data path
+        run: |
+          if [ -n "${{ vars.POSTGRES_DATA_PATH_TEST }}" ]; then
+            echo "POSTGRES_DATA_PATH=${{ vars.POSTGRES_DATA_PATH_TEST }}" >> "$GITHUB_ENV"
+          else
+            echo "POSTGRES_DATA_PATH=${GITHUB_WORKSPACE}/data/postgres" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build images
+        run: |
+          set -euo pipefail
+          docker build \
+            -f docker/api-python-base.Dockerfile \
+            -t villanelleliferet-python-ml-base:latest \
+            --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.org/simple}" \
+            .
+          docker compose build \
+            --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.org/simple}" \
+            --build-arg PYTHON_BASE_IMAGE="villanelleliferet-python-ml-base:latest"
+
+      - name: Start database
+        run: docker compose up -d db
+
+      - name: Wait for Postgres
+        run: |
+          set -euo pipefail
+          i=1
+          while [ "$i" -le 30 ]; do
+            if docker compose exec -T db pg_isready -h 127.0.0.1 -p 5432 -U postgres -d "${POSTGRES_DB:-ret_service}"; then
+              exit 0
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "Postgres is not ready in time" >&2
+              exit 1
+            fi
+            sleep 2
+            i=$((i + 1))
+          done
+
+      - name: Run migrations
+        run: docker compose run --rm api-migrate
+
+      - name: Start API and Web
+        run: docker compose up -d api web
+
+      - name: Health check
+        run: |
+          set -euo pipefail
+          i=1
+          while [ "$i" -le 30 ]; do
+            if curl -fsS http://127.0.0.1/health >/dev/null; then
+              echo "Health OK"
+              exit 0
+            fi
+            if [ "$i" -eq 30 ]; then
+              break
+            fi
+            sleep 2
+            i=$((i + 1))
+          done
+          echo "Health check failed" >&2
+          docker compose logs --no-color api web || true
+          exit 1
+
+      - name: Record rollback candidate SHA
+        run: |
+          set -euo pipefail
+          DEPLOY_STATE_DIR="${HOME}/.ret-deploy-state"
+          ROLLBACK_CANDIDATE_FILE="${DEPLOY_STATE_DIR}/last_test_before_sha"
+          BEFORE_SHA="${{ github.event.before }}"
+          mkdir -p "${DEPLOY_STATE_DIR}"
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_name }}" = "test" ] && [ -n "${BEFORE_SHA}" ] && [ "${BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]; then
+            echo "${BEFORE_SHA}" > "${ROLLBACK_CANDIDATE_FILE}"
+            echo ">>> deploy_test: recorded rollback candidate SHA=${BEFORE_SHA}"
+          else
+            echo ">>> deploy_test: rollback candidate SHA not updated (event=${{ github.event_name }}, ref=${{ github.ref_name }}, before=${BEFORE_SHA})"
+          fi
+
+  deploy_prod:
+    if: |
+      (github.event_name == 'push' && github.ref_name == 'master') ||
+      (github.event_name == 'workflow_dispatch' && github.ref_name == 'master')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to production server via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: ${{ secrets.SERVER_PORT || '22' }}
+          debug: true
+          script_stop: true
+          command_timeout: 30m
+          script: |
+            set -euo pipefail
+            echo ">>> deploy_prod: entering repo"
+            cd "${{ secrets.SERVER_DEPLOY_PATH }}"
+            pwd
+            echo ">>> deploy_prod: git sync"
+            git fetch --all --prune
+            git checkout master
+            git pull --ff-only origin master
+            # Use single quotes to prevent bash from interpreting '$' inside secrets.
+            export POSTGRES_PASSWORD='${{ secrets.POSTGRES_PASSWORD }}'
+            export JWT_SECRET='${{ secrets.JWT_SECRET }}'
+            export PIP_INDEX_URL='${{ vars.PIP_INDEX_URL }}'
+            export PYTHON_BASE_IMAGE='villanelleliferet-python-ml-base:latest'
+            export DOCKER_BUILDKIT=1
+            export COMPOSE_DOCKER_CLI_BUILD=1
+            echo ">>> deploy_prod: env exported (POSTGRES_PASSWORD len=${#POSTGRES_PASSWORD}, JWT_SECRET len=${#JWT_SECRET})"
+            echo ">>> deploy_prod: docker sanity"
+            command -v docker
+            docker version
+            docker compose version
+            echo ">>> deploy_prod: compose build"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml build \
+              --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.org/simple}" \
+              --build-arg PYTHON_BASE_IMAGE="${PYTHON_BASE_IMAGE}"
+            echo ">>> deploy_prod: start db"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d db
+            i=1
+            while [ "$i" -le 30 ]; do
+              if docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T db pg_isready -h 127.0.0.1 -p 5432 -U postgres -d "${POSTGRES_DB:-ret_service}"; then
+                break
+              fi
+              if [ "$i" -eq 30 ]; then
+                echo "Postgres is not ready in time" >&2
+                exit 1
+              fi
+              sleep 2
+              i=$((i + 1))
+            done
+            echo ">>> deploy_prod: migrations"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm api-migrate
+            echo ">>> deploy_prod: start api web"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api web
+            i=1
+            while [ "$i" -le 30 ]; do
+              if curl -fsS http://127.0.0.1/health >/dev/null; then
+                echo "Health OK"
+                exit 0
+              fi
+              if [ "$i" -eq 30 ]; then
+                break
+              fi
+              sleep 2
+              i=$((i + 1))
+            done
+            echo "Health check failed" >&2
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --no-color api web || true
+            exit 1

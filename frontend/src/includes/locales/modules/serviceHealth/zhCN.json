@@ -1,0 +1,6 @@
+{
+  "serviceHealth_checking_title": "正在检查服务状态",
+  "serviceHealth_checking_label": "正在连接后端服务...",
+  "serviceHealth_failed_title": "后端服务不可用",
+  "serviceHealth_failed_label": "请启动 web-server 后重试。"
+}

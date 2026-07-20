@@ -1,0 +1,59 @@
+{
+  "name": "ret",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.6.2",
+  "scripts": {
+    "repo:build": "turbo run build",
+    "repo:collect-release": "node scripts/collect-artifacts.mjs",
+    "repo:build:release": "pnpm repo:build && pnpm repo:collect-release",
+    "repo:release:frontend-server": "pnpm --filter @villanelle/ret-frontend build && pnpm --filter @villanelle/ret-server build",
+    "repo:release:electron": "pnpm --filter @villanelle/ret-electron package:win:all",
+    "repo:release": "pnpm repo:release:frontend-server && pnpm repo:collect-release",
+    "repo:test": "turbo run test",
+    "repo:lint": "turbo run lint",
+    "repo:lint:fix": "turbo run lint -- --fix",
+    "repo:typecheck": "turbo run typecheck",
+    "repo:dev": "pnpm dev:web-server",
+    "dev:server": "pnpm --filter @villanelle/ret-server dev",
+    "dev:frontend": "pnpm --filter @villanelle/ret-frontend dev",
+    "dev:web-server": "pnpm --parallel --filter @villanelle/ret-server --filter @villanelle/ret-frontend dev",
+    "dev:electron": "pnpm --filter @villanelle/ret-electron dev",
+    "build:frontend": "pnpm --filter @villanelle/ret-frontend build",
+    "build:server": "pnpm --filter @villanelle/ret-server build",
+    "build:electron": "pnpm --filter @villanelle/ret-electron build",
+    "package:electron:dir": "pnpm --filter @villanelle/ret-electron package:dir",
+    "package:electron:win": "pnpm --filter @villanelle/ret-electron package:win",
+    "package:electron:win:nsis": "pnpm --filter @villanelle/ret-electron package:win:nsis",
+    "package:electron:win:all": "pnpm --filter @villanelle/ret-electron package:win:all",
+    "test:shared": "pnpm --filter @villanelle/ret-shared test",
+    "test:shared:coverage": "pnpm --filter @villanelle/ret-shared test:coverage",
+    "test:server": "pnpm --filter @villanelle/ret-server test",
+    "test:server:coverage": "pnpm --filter @villanelle/ret-server test:coverage",
+    "test:server:e2e": "pnpm --filter @villanelle/ret-server test:e2e",
+    "test:electron": "pnpm --filter @villanelle/ret-electron test",
+    "test:electron:coverage": "pnpm --filter @villanelle/ret-electron test:coverage",
+    "test:frontend": "pnpm --filter @villanelle/ret-frontend test",
+    "test:frontend:coverage": "pnpm --filter @villanelle/ret-frontend test:coverage",
+    "test:frontend:e2e": "pnpm --filter @villanelle/ret-frontend test:e2e",
+    "test:e2e": "pnpm test:server:e2e && pnpm test:frontend:e2e",
+    "coverage:summary": "node scripts/generate-coverage-summary.mjs",
+    "test:coverage": "pnpm test:shared:coverage && pnpm test:frontend:coverage && pnpm test:electron:coverage && pnpm test:server:coverage && pnpm coverage:summary"
+  },
+  "devDependencies": {
+    "eslint": "9.22.0",
+    "turbo": "^2.5.6",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "8.27.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "argon2",
+      "electron",
+      "electron-winstaller",
+      "esbuild",
+      "sqlite3"
+    ]
+  }
+}

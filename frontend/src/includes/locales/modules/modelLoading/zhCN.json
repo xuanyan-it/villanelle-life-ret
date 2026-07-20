@@ -1,0 +1,8 @@
+{
+  "modelLoading_loading_title": "正在初始化模型",
+  "modelLoading_loading_label": "模型加载中，初次启动时间较长请耐心等待...",
+  "modelLoading_ready_title": "已可进行检测",
+  "modelLoading_ready_label": "模型加载完成",
+  "modelLoading_failed_title": "请检查模型文件或运行环境",
+  "modelLoading_failed_label": "模型加载失败，请联系售后"
+}

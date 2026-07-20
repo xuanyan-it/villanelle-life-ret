@@ -1,0 +1,18 @@
+{
+  "settings_title": "Settings",
+  "settings_loginStatus_username": "Username",
+  "settings_loginStatus_role": "Role",
+  "settings_loginStatus_administrator": "Administrator",
+  "settings_loginStatus_operator": "Operator",
+  "settings_logout": "Logout",
+  "settings_localeOptions_label": "Language",
+  "settings_addNewOperator": "Add Operator",
+  "settings_loginStatus_userManagement": "User Management",
+  "settings_token": "Token",
+  "settings_loginStatus_instituteName": "Institute Name",
+  "settings_confirmDeleteUser_title": "Confirm Delete User?",
+  "settings_confirmDeleteUser_content": "Deleted user accounts cannot be recovered",
+  "settings_loginStatus_userManagement_tooltip": "Issue the token for new users to register on the registration page.",
+  "settings_modelVersion": "Model Version",
+  "settings_modelThreshold": "Result Threshold"
+}

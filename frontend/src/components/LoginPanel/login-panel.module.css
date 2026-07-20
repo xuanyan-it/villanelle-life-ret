@@ -1,0 +1,39 @@
+.new_record_button {
+  height: 38px;
+}
+.input_field {
+  margin-top: 15px;
+  margin-bottom: 15px;
+  line-height: 32px;
+}
+.rootTabs :global(.ant-tabs-nav) {
+  margin-bottom: 20px;
+}
+.rootTabs :global(.ant-tabs-tab) {
+  font-weight: 600;
+  font-size: 15px;
+  padding-top: 6px;
+  padding-bottom: 10px;
+}
+.subTabs :global(.ant-tabs-nav) {
+  margin-bottom: 16px;
+}
+.subTabs :global(.ant-tabs-nav-wrap) {
+  background: #f7f8fa;
+  border: 1px solid #e9edf3;
+  border-radius: 10px;
+  padding: 4px;
+}
+.subTabs :global(.ant-tabs-tab) {
+  border-radius: 8px;
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: #4b5563;
+}
+.subTabs :global(.ant-tabs-tab-active) {
+  background: #ffffff;
+}
+.subTabs :global(.ant-tabs-ink-bar) {
+  display: none;
+}

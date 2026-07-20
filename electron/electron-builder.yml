@@ -1,0 +1,27 @@
+appId: com.ret.desktop
+productName: Ret
+directories:
+  output: release
+  buildResources: assets
+files:
+  - dist/**/*
+  - node_modules/**/*
+  - package.json
+  - "!**/*.map"
+asar: true
+asarUnpack:
+  - node_modules/sqlite3/**/*
+extraResources:
+  - from: ../frontend/dist
+    to: web
+    filter:
+      - "**/*"
+  - from: ../assets/templates
+    to: assets/templates
+    filter:
+      - "**/*"
+  - from: ../assets/models/model.config.json
+    to: assets/models/model.config.json
+win:
+  icon: assets/app.ico
+publish: null

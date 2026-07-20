@@ -1,0 +1,31 @@
+.header {
+  height: 100px;
+  border-radius: 10px;
+  text-align: center;
+  padding: 0 20px 0 20px;
+  margin-top: 10px;
+}
+.titleArea {
+  flex: 1;
+  min-width: 0;
+  column-gap: 12px;
+}
+.titleWrap {
+  position: relative;
+  min-width: 0;
+}
+.titleMeasure {
+  position: absolute;
+  visibility: hidden;
+  white-space: nowrap;
+  height: 0;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+.logoMeasure {
+  position: absolute;
+  visibility: hidden;
+  height: 0;
+  overflow: hidden;
+}

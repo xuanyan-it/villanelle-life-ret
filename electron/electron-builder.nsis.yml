@@ -1,0 +1,9 @@
+extends: ./electron-builder.yml
+directories:
+  output: release/nsis
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+

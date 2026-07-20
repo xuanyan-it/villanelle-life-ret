@@ -1,0 +1,8 @@
+{
+  "modelLoading_loading_title": "Please wait while the model is initializing",
+  "modelLoading_loading_label": "Model loading...",
+  "modelLoading_ready_title": "You can start testing now",
+  "modelLoading_ready_label": "Model loaded",
+  "modelLoading_failed_title": "Please check model files or runtime environment",
+  "modelLoading_failed_label": "Model load failed"
+}

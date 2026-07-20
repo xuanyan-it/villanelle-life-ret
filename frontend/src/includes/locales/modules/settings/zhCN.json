@@ -1,0 +1,18 @@
+{
+  "settings_title": "设置",
+  "settings_loginStatus_instituteName": "机构名称",
+  "settings_loginStatus_username": "用户姓名",
+  "settings_loginStatus_role": "身份类型",
+  "settings_loginStatus_administrator": "管理员",
+  "settings_loginStatus_operator": "操作员",
+  "settings_confirmDeleteUser_title": "确认删除用户",
+  "settings_confirmDeleteUser_content": "用户一旦删除将不可恢复",
+  "settings_logout": "退出登录",
+  "settings_localeOptions_label": "语言",
+  "settings_loginStatus_userManagement": "用户管理",
+  "settings_loginStatus_userManagement_tooltip": "将授权码分发给新用户，并在注册页面经校验后注册。",
+  "settings_token": "授权码",
+  "settings_addNewOperator": "新增操作员",
+  "settings_modelVersion": "模型版本",
+  "settings_modelThreshold": "判定阈值"
+}

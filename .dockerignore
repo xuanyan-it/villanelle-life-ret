@@ -1,0 +1,23 @@
+# VCS
+.git
+.github
+
+# Editor/OS
+.vscode
+.cursor
+*.log
+
+# Node
+**/node_modules
+.pnpm-store
+
+# Build outputs
+**/dist
+**/build
+**/.next
+**/.turbo
+coverage
+
+# Python
+**/__pycache__
+**/*.pyc

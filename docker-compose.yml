@@ -1,0 +1,79 @@
+﻿# Postgres data: POSTGRES_DATA_PATH (bind mount host dir).
+# - Local: default ./data/postgres
+# - CI test job: default $GITHUB_WORKSPACE/data/postgres unless vars.POSTGRES_DATA_PATH_TEST is set
+# - Prod deploy: default <SERVER_DEPLOY_PATH>/data/postgres unless vars.POSTGRES_DATA_PATH_PROD is set
+# Containers use restart: unless-stopped so they come back after host reboot once Docker is enabled on boot.
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-ret_service}
+    volumes:
+      - ${POSTGRES_DATA_PATH:-./data/postgres}:/var/lib/postgresql/data
+
+  api:
+    image: villanelleliferet-api:latest
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+      args:
+        PYTHON_BASE_IMAGE: ${PYTHON_BASE_IMAGE:-villanelleliferet-python-ml-base:latest}
+    environment:
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      PORT: 7001
+
+      # Ensure Python worker uses the virtualenv Python (avoids PEP-668 system pip restriction)
+      SERVICE_PYTHON_CMD: /opt/venv/bin/python
+
+      # Required by server env schema
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ret_service}
+      JWT_SECRET: ${JWT_SECRET}
+
+      # Used by server to locate worker.py, model.config.json and templates.
+      MODEL_ROOT: /app/server/assets/models
+      TEMPLATE_DIR: /app/server/assets/templates
+
+      # Optional but explicit
+      TEMPLATE_FILENAME: template_zh-CN.csv
+
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  api-migrate:
+    image: villanelleliferet-api:latest
+    # build:
+    #   context: .
+    #   dockerfile: docker/api/Dockerfile
+    environment:
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      PORT: 7001
+
+      # Keep consistent runtime python for any worker-related imports
+      SERVICE_PYTHON_CMD: /opt/venv/bin/python
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ret_service}
+      JWT_SECRET: ${JWT_SECRET}
+      MODEL_ROOT: /app/server/assets/models
+      TEMPLATE_DIR: /app/server/assets/templates
+      TEMPLATE_FILENAME: template_zh-CN.csv
+    depends_on:
+      - db
+    command: ["pnpm", "--filter", "@villanelle/ret-server", "db:migrate"]
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web/Dockerfile
+    environment:
+      NGINX_SSL_ENABLED: "false"
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    restart: unless-stopped

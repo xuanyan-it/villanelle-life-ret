@@ -1,0 +1,10 @@
+{
+  "footer_companyName": "Villanelle Life",
+  "footer_batchStatus_completed": "Completed",
+  "footer_batchStatus_progress": "Completed {{completed}}/{{total}}",
+  "footer_batchStatus_abortAndClear": "Cancel",
+  "footer_batchStatus_cancelling": "Cancelling...",
+  "footer_batchStatus_loading": "Loading",
+  "footer_batchStatus_done": "Done",
+  "footer_batchStatus_refresh": "Refresh"
+}

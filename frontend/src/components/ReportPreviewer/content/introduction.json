@@ -1,0 +1,40 @@
+{
+  "zh": {
+    "t": "AI精准预测，风险一目了然。\nAI定制防护，守护您的每一次微笑。",
+    "t1": "您做了明智的选择！ ",
+    "p1l1": "",
+    "p1l2": "行种植牙检查的同时，帮助识别任何潜在的口腔健康问题。 ",
+    "p1l3": "简而言之，这意味着您现在拥有了使用世界级技术进行的高科技种植牙风险评估的额外保障。",
+    "t2": "工作原理",
+    "p2l1": "一旦您的数字化 X 光全景图像上传到智植安的系统，先进的医疗人工智能将立即分析您的图像，在早期发",
+    "p2l2": "现潜在的口腔健康问题，例如：",
+    "p2b1": "种植牙周围炎",
+    "p2b2": "牙周病",
+    "p2b3": "龈炎",
+    "p2b4": "种植体不稳等",
+    "t3": "AI技术究竟是如何工作的？",
+    "p3l1": "本质上您上传的 X 光全景图像将通过我们最新的深度学习模型进行数字化评估，以确定您是否可能存在",
+    "p3l2": "潜在的口腔健康状况。智植安的报告将准确地突出任何需要关注的区域，并根据您所在的年龄组提供一",
+    "p3l3": "个口腔健康评估。",
+    "t4": "您的报告已附上",
+    "p4l1": "",
+    "p4l2": "何病状，均可以与您的牙科医生讨论。口腔健康至关重要，早期发现和干预可以产生巨大的影响，甚至在",
+    "p4l3": "某些情况下可以预防种植牙失败。",
+    "p4l4": "如果您有任何问题只需咨询您的牙科医生，他们会乐于为您提供帮助。"
+  },
+  "en": {
+    "t": "Elevate Dental Care with A.I.\nPersonalized. Predictive. Safe.",
+    "t1": "You've made a wise decision!",
+    "p1": "While your dental professional has assessed your suitability for dental implants, our new SimS software technology from Shanghai Villanelle Life Co., Ltd. offers additional insights to identify any potential oral health issues. In essence, this means you now have the added reassurance of a high-tech risk assessment for dental implants, utilizing world-class technology.",
+    "t2": "How it works.",
+    "p2": "After your panoramic dental X-ray images are uploaded to the SimS system, our advanced medical Artificial Intelligence (AI) instantly analyzes your images to detect early signs of potential oral health issues, such as:",
+    "p2b1": "Peri-implantitis",
+    "p2b2": "Implant instability",
+    "p2b3": "Gingivitis",
+    "p2b4": "Periodontitis",
+    "t3": "What does the AI technology actually do?",
+    "p3": "Fundamentally, your panoramic dental X-ray images are digitally evaluated using our most advanced deep learning model to ascertain if there are any underlying oral health conditions. A SimS report will precisely highlight any areas of concern and furnish you with an oral health ranking compared to others in your age demographic.",
+    "t4": "Your report is attached. ",
+    "p4": "SimS, powered by our latest deep learning model, assists in the early detection of oral health issues (including chronic diseases). Any conditions detected will be included in your report, which you can discuss with your dentist. Your oral health is crucial – and early detection and intervention can make a significant impact, and in some cases, may even prevent implant failure. Of course, if you have any questions – just ask your dentist and they will be happy to assist."
+  }
+}

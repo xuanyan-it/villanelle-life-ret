@@ -1,0 +1,20 @@
+{
+  "short_name": "人RPC基因分析软件",
+  "name": "人RPS4Y1、PKHD1L1、CRABP1基因分析软件",
+  "icons": [
+    {
+      "src": "logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#ffffff"
+}

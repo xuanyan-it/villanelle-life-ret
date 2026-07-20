@@ -1,0 +1,1 @@
+ALTER TABLE "evaluation_job" ADD COLUMN "created_by_username" text DEFAULT '' NOT NULL;

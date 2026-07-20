@@ -1,0 +1,149 @@
+﻿on:
+  workflow_dispatch:
+    inputs:
+      rollback_sha:
+        description: "Emergency target commit SHA (optional; default: test-before-deploy SHA, then last successful test deploy)"
+        required: false
+        type: string
+      emergency_confirm:
+        description: "Confirm this is emergency rollback (true/false)"
+        required: true
+        type: boolean
+
+concurrency:
+  group: emergency-rollback-test-environment
+  cancel-in-progress: false
+
+jobs:
+  rollback_test:
+    name: Emergency rollback test environment
+    runs-on: [self-hosted, linux]
+    env:
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      NGINX_SSL_ENABLED: "false"
+      PIP_INDEX_URL: ${{ vars.PIP_INDEX_URL }}
+      DOCKER_BUILDKIT: "1"
+      COMPOSE_DOCKER_CLI_BUILD: "1"
+    steps:
+      - name: Checkout test branch
+        uses: actions/checkout@v4
+        with:
+          ref: test
+          fetch-depth: 0
+
+      - name: Postgres host data path
+        run: |
+          if [ -n "${{ vars.POSTGRES_DATA_PATH_TEST }}" ]; then
+            echo "POSTGRES_DATA_PATH=${{ vars.POSTGRES_DATA_PATH_TEST }}" >> "$GITHUB_ENV"
+          else
+            echo "POSTGRES_DATA_PATH=${GITHUB_WORKSPACE}/data/postgres" >> "$GITHUB_ENV"
+          fi
+
+      - name: Roll back test deployment
+        run: |
+          set -euo pipefail
+          DEPLOY_STATE_DIR="${HOME}/.ret-deploy-state"
+          LAST_BEFORE_FILE="${DEPLOY_STATE_DIR}/last_test_before_sha"
+          LAST_SUCCESS_FILE="${DEPLOY_STATE_DIR}/last_successful_test_sha"
+          INPUT_SHA="${{ github.event.inputs.rollback_sha }}"
+          EMERGENCY_CONFIRM="${{ github.event.inputs.emergency_confirm }}"
+          TARGET_SHA=""
+
+          if [ "${EMERGENCY_CONFIRM}" != "true" ]; then
+            echo ">>> rollback_test: emergency_confirm must be true" >&2
+            exit 1
+          fi
+
+          mkdir -p "${DEPLOY_STATE_DIR}"
+
+          if [ -n "${INPUT_SHA}" ]; then
+            if ! [[ "${INPUT_SHA}" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+              echo ">>> rollback_test: rollback_sha must be a commit SHA (7-40 hex chars)" >&2
+              exit 1
+            fi
+            TARGET_SHA="${INPUT_SHA}"
+            echo ">>> rollback_test: using manual SHA=${TARGET_SHA}"
+          elif [ -f "${LAST_BEFORE_FILE}" ]; then
+            TARGET_SHA="$(cat "${LAST_BEFORE_FILE}")"
+            echo ">>> rollback_test: using test-before-deploy SHA=${TARGET_SHA}"
+          elif [ -f "${LAST_SUCCESS_FILE}" ]; then
+            TARGET_SHA="$(cat "${LAST_SUCCESS_FILE}")"
+            echo ">>> rollback_test: using recorded SHA=${TARGET_SHA}"
+          else
+            echo ">>> rollback_test: no rollback target found" >&2
+            exit 1
+          fi
+
+          health_check() {
+            i=1
+            while [ "$i" -le 30 ]; do
+              if curl -fsS http://127.0.0.1/health >/dev/null; then
+                echo "Health OK"
+                return 0
+              fi
+              if [ "$i" -eq 30 ]; then
+                break
+              fi
+              sleep 2
+              i=$((i + 1))
+            done
+            return 1
+          }
+
+          deploy_current_checkout() {
+            docker build \
+              -f docker/api-python-base.Dockerfile \
+              -t villanelleliferet-python-ml-base:latest \
+              --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.org/simple}" \
+              .
+            docker compose build \
+              --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.org/simple}" \
+              --build-arg PYTHON_BASE_IMAGE="villanelleliferet-python-ml-base:latest"
+            docker compose up -d db
+
+            i=1
+            while [ "$i" -le 30 ]; do
+              if docker compose exec -T db pg_isready -h 127.0.0.1 -p 5432 -U postgres -d "${POSTGRES_DB:-ret_service}"; then
+                break
+              fi
+              if [ "$i" -eq 30 ]; then
+                echo "Postgres is not ready in time" >&2
+                return 1
+              fi
+              sleep 2
+              i=$((i + 1))
+            done
+
+            docker compose run --rm api-migrate
+            docker compose up -d api web
+            health_check
+          }
+
+          git fetch origin test --prune
+          git rev-parse --verify "${TARGET_SHA}" >/dev/null
+          git checkout "${TARGET_SHA}"
+
+          if deploy_current_checkout; then
+            echo ">>> rollback_test: emergency rollback succeeded to ${TARGET_SHA}"
+            echo "${TARGET_SHA}" > "${LAST_SUCCESS_FILE}"
+            {
+              echo "## Emergency rollback completed"
+              echo ""
+              echo "- Deployed SHA: \`${TARGET_SHA}\`"
+              echo "- Branch history is unchanged by this workflow"
+              echo "- Next action: create a revert/fix PR against \`test\` to align repository state"
+            } >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo ">>> rollback_test: emergency rollback failed at ${TARGET_SHA}" >&2
+            docker compose logs --no-color api web || true
+            git checkout test
+            echo ">>> rollback_test: attempting to restore test branch deployment"
+            if ! deploy_current_checkout; then
+              echo ">>> rollback_test: failed to restore test deployment" >&2
+              docker compose logs --no-color api web || true
+            fi
+            exit 1
+          fi
+
+          git checkout test
