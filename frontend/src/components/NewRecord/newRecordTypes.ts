@@ -1,5 +1,4 @@
 import type { SampleRecordRequestPayload } from "../../types";
-export type QualityControlType = "positive" | "negative";
 export interface SampleRecordInputFieldType {
   name: string;
   label: string;
@@ -11,8 +10,14 @@ export type FormFieldType = Omit<
   | "instituteName"
   | "hospitalName"
   | "testDate"
-  | "sampleType"
+  | "uploadId"
+  | "slideFileName"
+  | "slideId"
   // Async evaluation MVP fields are not part of the NewRecord form UI.
   | "evaluationAsync"
   | "evaluationJobUuid"
-> & { sampleType: SampleRecordRequestPayload["sampleType"] | "" };
+> & {
+  slideFile?: File;
+  modelType?: "2class" | "3class" | "5class";
+  generateHeatmap?: boolean;
+};

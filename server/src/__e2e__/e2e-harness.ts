@@ -42,15 +42,14 @@ type StoredRecord = {
   patientName: string;
   patientAge: string;
   patientGender: string;
-  sampleId: string;
-  sampleType: string;
+  uploadId: string;
+  slideFileName: string;
+  slideId: string;
   samplingDate: string;
   receptionDate: string;
   testDate: string;
-  RPS4Y1: string;
-  PKHD1L1: string;
-  CRABP1: string;
-  GAPDH: string;
+  modelType: "2class" | "3class" | "5class";
+  generateHeatmap: boolean;
   testerName: string;
   checkerName: string;
   reviewerName: string;
@@ -177,15 +176,14 @@ const testState = vi.hoisted(() => {
           patientName: payload.patientName,
           patientAge: payload.patientAge,
           patientGender: payload.patientGender,
-          sampleId: payload.sampleId,
-          sampleType: payload.sampleType,
+          uploadId: payload.uploadId,
+          slideFileName: payload.slideFileName,
+          slideId: payload.slideId,
           samplingDate: payload.samplingDate,
           receptionDate: payload.receptionDate,
           testDate: payload.testDate,
-          RPS4Y1: payload.RPS4Y1,
-          PKHD1L1: payload.PKHD1L1,
-          CRABP1: payload.CRABP1,
-          GAPDH: payload.GAPDH,
+          modelType: payload.modelType,
+          generateHeatmap: payload.generateHeatmap,
           testerName: payload.testerName,
           reviewerName: payload.reviewerName,
           otherInfo: payload.otherInfo,

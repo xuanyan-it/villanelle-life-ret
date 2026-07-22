@@ -20,6 +20,7 @@ import { ModelModule } from "./modules/model/model.module";
 import { PersistenceModule } from "./modules/persistence/persistence.module";
 import { RecordModule } from "./modules/record/record.module";
 import { UserModule } from "./modules/user/user.module";
+import { UploadModule } from "./modules/upload/upload.module";
 
 const serverRoot = path.resolve(__dirname, "..");
 const nodeEnv = resolveNodeEnv(process.env.NODE_ENV);
@@ -42,7 +43,8 @@ const envFilePath = path.join(serverRoot, `.env.${envProfile}`);
     InstituteModule,
     ModelModule,
     RecordModule,
-    DownloadModule
+    DownloadModule,
+    UploadModule
   ],
   providers: [
     {

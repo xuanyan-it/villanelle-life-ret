@@ -25,7 +25,7 @@ import {
   ActiveEvaluationJobsResponseSchema,
   BaseUserSchema
 } from "@villanelle/ret-shared/contracts/base";
-import { GenderSchema, SampleTypeSchema } from "@villanelle/ret-shared/domain";
+import { GenderSchema } from "@villanelle/ret-shared/domain";
 
 export const ServerUserSchema = BaseUserSchema;
 export const ServerUserSummarySchema = BaseUserSummarySchema;
@@ -35,8 +35,7 @@ export const ServerRecordSchema = BaseRecordResponseSchema.omit({
   id: true,
   checkerName: true
 }).extend({
-  patientGender: z.enum(GenderSchema.options),
-  sampleType: z.enum(SampleTypeSchema.options)
+  patientGender: z.enum(GenderSchema.options)
 });
 export const ServerAuthResultSchema = BaseAuthResultSchema;
 

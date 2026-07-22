@@ -38,9 +38,7 @@ export class RecordService {
   }
 
   async createRecord(record: RecordDraft): Promise<SampleRecord> {
-    return createRecord(record, this.recordPort, (PKHD1L1, RPS4Y1, CRABP1, GAPDH, draft) =>
-      this.recordEvaluator.evaluate(PKHD1L1, RPS4Y1, CRABP1, GAPDH, draft)
-    );
+    return createRecord(record, this.recordPort, (draft) => this.recordEvaluator.evaluate(draft));
   }
 
   async createRecordWithoutEvaluation(record: RecordDraft): Promise<SampleRecord> {
@@ -56,15 +54,14 @@ export class RecordService {
       patientName: draft.patientName,
       patientAge: draft.patientAge,
       patientGender: draft.patientGender,
-      sampleId: draft.sampleId,
-      sampleType: draft.sampleType,
+      uploadId: draft.uploadId,
+      slideFileName: draft.slideFileName,
+      slideId: draft.slideId,
       samplingDate: draft.samplingDate,
       receptionDate: draft.receptionDate,
       testDate: draft.testDate,
-      RPS4Y1: draft.RPS4Y1,
-      PKHD1L1: draft.PKHD1L1,
-      CRABP1: draft.CRABP1,
-      GAPDH: draft.GAPDH,
+      modelType: draft.modelType,
+      generateHeatmap: draft.generateHeatmap,
       testerName: draft.testerName,
       reviewerName: "",
       otherInfo: draft.otherInfo,
@@ -170,14 +167,7 @@ export class RecordService {
           return;
         }
 
-        const det = recordDraft;
-        const probability = await this.recordEvaluator.evaluate(
-          det.PKHD1L1,
-          det.RPS4Y1,
-          det.CRABP1,
-          det.GAPDH,
-          det
-        );
+        const probability = await this.recordEvaluator.evaluate(recordDraft);
 
         const jobAfter = await this.evaluationJobDb!.select({
           cancelRequested: evaluationJobsTable.cancelRequested
@@ -433,13 +423,7 @@ export class RecordService {
               ));
 
               console.log("evaluating", i);
-              const probability = await this.recordEvaluator.evaluate(
-                draft.PKHD1L1,
-                draft.RPS4Y1,
-                draft.CRABP1,
-                draft.GAPDH,
-                draft
-              );
+              const probability = await this.recordEvaluator.evaluate(draft);
               console.log("evaluated", i);
               const jobAfter = await this.evaluationJobDb!.select({
                 cancelRequested: evaluationJobsTable.cancelRequested

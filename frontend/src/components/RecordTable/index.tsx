@@ -58,7 +58,6 @@ import type { SampleRecordResponsePayload } from "../../types";
 import {
   Gender,
   RequestStatus,
-  SampleType,
   // SampleRecord,
 } from "../../types";
 import { isFieldValueNullString } from "../../utils/nullCheck";
@@ -66,8 +65,8 @@ import { buildCsvContent, objectArr2csv } from "../../utils/recordParser";
 import DraggableModal from "../DraggableModal";
 import {
   filterVisibleRecords,
-  formatCt,
-  isNonMetastasisResult,
+  getResultLabelKey,
+  getResultTagColor,
   isEvaluationResultAvailable,
 } from "./recordTable.logic";
 import styles from "./record-table.module.css";
@@ -194,18 +193,8 @@ const RecordTable = () => {
     const sampleSourceItems: DescriptionsProps["items"] = [
       {
         key: "7",
-        label: t("recordTable_geneInfo_sampleId"),
-        children: record.sampleId,
-      },
-      {
-        key: "9",
-        label: t("recordTable_geneInfo_sampleType"),
-        children:
-          record.sampleType === SampleType.QualityContral
-            ? record.sampleId?.toUpperCase().startsWith("NQ-")
-              ? t("recordTable_geneInfo_sampleType_qualityControl_negative")
-              : t("recordTable_geneInfo_sampleType_qualityControl_positive")
-            : t("recordTable_geneInfo_sampleType_regular"),
+        label: t("recordTable_slideFileName"),
+        children: record.slideFileName,
       },
       {
         key: "10",
@@ -261,51 +250,21 @@ const RecordTable = () => {
     ];
     const geneInfoItems: DescriptionsProps["items"] = [
       {
-        key: "13",
-        label: t("recordTable_geneInfo_RPS4Y1"),
-        children: formatCt(record.RPS4Y1),
-      },
-      {
-        key: "14",
-        label: t("recordTable_geneInfo_PKHD1L1"),
-        children: formatCt(record.PKHD1L1),
-      },
-      {
-        key: "15",
-        label: t("recordTable_geneInfo_CRABP1"),
-        children: formatCt(record.CRABP1),
-      },
-      {
-        key: "16",
-        label: t("recordTable_geneInfo_GAPDH"),
-        children: formatCt(record.GAPDH),
-      },
-      {
         key: "18",
         label: t("recordTable_geneInfo_evaluationResult"),
-        children: isEvaluationResultAvailable(record.result) ? isNonMetastasisResult(record.result) ? (
-          record.isDeleted ? (
+        children: isEvaluationResultAvailable(record.result) ? (() => {
+          const labelKey = getResultLabelKey(record.result);
+          const color = getResultTagColor(record.result);
+          return record.isDeleted ? (
             <Tag color="default">
               <span style={{ textDecoration: "line-through", color: "#666" }}>
-                {t("recordTable_geneInfo_evaluationResult_non_metastasis")}
+                {labelKey ? t(labelKey) : record.result}
               </span>
             </Tag>
           ) : (
-            <Tag color="success">
-              {t("recordTable_geneInfo_evaluationResult_non_metastasis")}
-            </Tag>
-          )
-        ) : record.isDeleted ? (
-          <Tag color="default">
-            <span style={{ textDecoration: "line-through", color: "#666" }}>
-              {t("recordTable_geneInfo_evaluationResult_metastasis")}
-            </span>
-          </Tag>
-        ) : (
-          <Tag color="volcano">
-            {t("recordTable_geneInfo_evaluationResult_metastasis")}
-          </Tag>
-        ) : (
+            <Tag color={color}>{labelKey ? t(labelKey) : record.result}</Tag>
+          );
+        })() : (
           <Tag color="default">{t("recordTable_notAvailable")}</Tag>
         ),
       },
@@ -335,7 +294,7 @@ const RecordTable = () => {
           : t("recordTable_notAvailable"),
       },
     ];
-    setDescriptionTitle(record.sampleId.concat(" - ", record.hospitalName));
+    setDescriptionTitle(record.slideFileName.concat(" - ", record.hospitalName));
     setSampleSourceDescriptionItems(withDelete(sampleSourceItems));
     setGeneInfoDescriptionItems(withDelete(geneInfoItems));
     setReviewDescriptionItems(withDelete(reviewItems));
@@ -497,7 +456,7 @@ const RecordTable = () => {
   /* Build title before opening print confirmation. */
   const handleOpenPrintConfirmation = (record: SampleRecordResponsePayload) => {
     setPrintDescriptionTitle(
-      record.sampleId.concat(
+      record.slideFileName.concat(
         " - ",
         record.hospitalName,
         " - ",
@@ -574,10 +533,10 @@ const RecordTable = () => {
   /* column */
   const columns: ProColumns<SampleRecordResponsePayload>[] = [
     {
-      title: t("recordTable_geneInfo_sampleId"),
-      dataIndex: "sampleId",
+      title: t("recordTable_slideFileName"),
+      dataIndex: "slideFileName",
       fixed: "left",
-      key: "sampleId",
+      key: "slideFileName",
       align: "left",
       width: 80,
       onHeaderCell: () => ({
@@ -585,88 +544,34 @@ const RecordTable = () => {
       }),
       render: (text, record) => (
         <Typography.Text style={{ display: "block", textAlign: "left" }}>
-          {record.sampleId}
+          {record.slideFileName}
         </Typography.Text>
       ),
-    },
-    {
-      title: t("recordTable_geneInfo_RPS4Y1"),
-      dataIndex: "RPS4Y1",
-      key: "RPS4Y1",
-      render: (text, record, index) => (
-        <Typography.Text>{formatCt(record.RPS4Y1)}</Typography.Text>
-      ),
-      align: "center",
-      width: 80,
-    },
-    {
-      title: t("recordTable_geneInfo_PKHD1L1"),
-      dataIndex: "PKHD1L1",
-      key: "PKHD1L1",
-      render: (text, record, index) => (
-        <Typography.Text>{formatCt(record.PKHD1L1)}</Typography.Text>
-      ),
-      align: "center",
-      width: 80,
-    },
-    {
-      title: t("recordTable_geneInfo_CRABP1"),
-      dataIndex: "CRABP1",
-      key: "CRABP1",
-      render: (text, record, index) => (
-        <Typography.Text>{formatCt(record.CRABP1)}</Typography.Text>
-      ),
-      align: "center",
-      width: 80,
-    },
-    {
-      title: t("recordTable_geneInfo_GAPDH"),
-      dataIndex: "GAPDH",
-      key: "GAPDH",
-      render: (text, record, index) => (
-        <Typography.Text>{formatCt(record.GAPDH)}</Typography.Text>
-      ),
-      align: "center",
-      width: 80,
     },
     {
       title: t("recordTable_geneInfo_evaluationResult"),
       dataIndex: "result",
       key: "result",
-      // render: (text, record, index) =>
-      //   record.result === EvaluationResultEnum.Non_Metastasis ? (
-      //     <Tag color="success">
-      //       {t("recordTable_geneInfo_evaluationResult_non_metastasis")}
-      //     </Tag>
-      //   ) : (
-      //     <Tag color="volcano">
-      //       {t("recordTable_geneInfo_evaluationResult_metastasis")}
-      //     </Tag>
-      //   ),
-      render: (text, record, index) =>
-        isNonMetastasisResult(record.result) ? (
-          record.isDeleted ? (
+      render: (text, record, index) => {
+        const labelKey = getResultLabelKey(record.result);
+        if (!labelKey) {
+          return (
             <Tag color="default">
-              <span style={{ textDecoration: "line-through", color: "#666" }}>
-                {t("recordTable_geneInfo_evaluationResult_non_metastasis")}
-              </span>
+              {record.result || t("recordTable_notAvailable")}
             </Tag>
-          ) : (
-            <Tag color="success">
-              {t("recordTable_geneInfo_evaluationResult_non_metastasis")}
-            </Tag>
-          )
-        ) : record.isDeleted ? (
+          );
+        }
+        const color = getResultTagColor(record.result);
+        return record.isDeleted ? (
           <Tag color="default">
             <span style={{ textDecoration: "line-through", color: "#666" }}>
-              {t("recordTable_geneInfo_evaluationResult_metastasis")}
+              {t(labelKey)}
             </span>
           </Tag>
         ) : (
-          <Tag color="volcano">
-            {t("recordTable_geneInfo_evaluationResult_metastasis")}
-          </Tag>
-        ),
+          <Tag color={color}>{t(labelKey)}</Tag>
+        );
+      },
       align: "center",
       width: 80,
     },
@@ -732,10 +637,7 @@ const RecordTable = () => {
               color="default"
               variant="filled"
               data-testid={`record-print-${record.uuid}`}
-              disabled={
-                Boolean(record.isDeleted) ||
-                record.sampleType === SampleType.QualityContral
-              }
+              disabled={Boolean(record.isDeleted)}
               onClick={() => {
                 handleOpenPrintConfirmation(record);
               }}
@@ -750,7 +652,6 @@ const RecordTable = () => {
             type="primary"
             className={styles.noStrike}
             data-testid={`record-check-${record.uuid}`}
-            disabled={record.sampleType === SampleType.QualityContral}
             onClick={() => handleOpenSampleDetail(record)}
           >
             {t("recordTable_operation_check")}

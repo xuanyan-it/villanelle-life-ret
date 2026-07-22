@@ -22,6 +22,20 @@
       "when": 1774861557452,
       "tag": "0002_flowery_jazinda",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784704143000,
+      "tag": "0003_ret_wsi_record",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784705000000,
+      "tag": "0004_svs_identity",
+      "breakpoints": true
     }
   ]
 }

@@ -6,7 +6,6 @@ import readline from "node:readline";
 import { Inject, Injectable, OnModuleDestroy } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
-import { computeDetForWorker, mapGenderForWorker, mapSampleTypeForWorker } from "@villanelle/ret-shared/application";
 import { SharedClientErrorMessage } from "@villanelle/ret-shared/contracts";
 import type { RecordDraft } from "@villanelle/ret-shared/domain";
 import { createSanitizedLogger } from "../../common/logging/sanitized-logger";
@@ -35,11 +34,9 @@ type WorkerReadyMessage = {
 };
 
 type WorkerPredictPayload = {
-  DET_PKHD1L1: string;
-  DET_RPS4Y1: string;
-  DET_CRABP1: string;
-  Gender: string;
-  sampleType: string;
+  modelType: "2class" | "3class" | "5class";
+  generateHeatmap: boolean;
+  uploadId: string;
 };
 
 type PendingRequest = {
@@ -252,13 +249,7 @@ class PythonWorkerClient {
 }
 
 export interface RecordEvaluator {
-  evaluate(
-    PKHD1L1: string,
-    RPS4Y1: string,
-    CRABP1: string,
-    GAPDH: string,
-    record: RecordDraft
-  ): Promise<string>;
+  evaluate(record: RecordDraft): Promise<string>;
 }
 
 @Injectable()
@@ -268,13 +259,7 @@ export class PythonRecordEvaluator implements RecordEvaluator, OnModuleDestroy {
 
   constructor(@Inject(ConfigService) private readonly configService: ConfigService) {}
 
-  async evaluate(
-    PKHD1L1: string,
-    RPS4Y1: string,
-    CRABP1: string,
-    GAPDH: string,
-    record: RecordDraft
-  ): Promise<string> {
+  async evaluate(record: RecordDraft): Promise<string> {
     const modelRoot = resolveServerModelDir(this.configService.get<string>("MODEL_ROOT"));
     let modelVersion = "unknown";
     try {
@@ -294,21 +279,15 @@ export class PythonRecordEvaluator implements RecordEvaluator, OnModuleDestroy {
 
     try {
       await this.workerClient.start(pythonCmd, args);
-      const det = computeDetForWorker(PKHD1L1, RPS4Y1, CRABP1, GAPDH);
       const probability = await this.workerClient.request({
-        DET_PKHD1L1: det.DET_PKHD1L1,
-        DET_RPS4Y1: det.DET_RPS4Y1,
-        DET_CRABP1: det.DET_CRABP1,
-        Gender: mapGenderForWorker(record.patientGender),
-        sampleType: mapSampleTypeForWorker(record.sampleType, record.sampleId)
+        modelType: record.modelType,
+        generateHeatmap: record.generateHeatmap,
+        uploadId: record.uploadId
       });
 
       const result = Number.isFinite(probability) ? `${probability}` : "";
       this.logger.log(
-        `[evaluation] source=worker modelVersion=${modelVersion} sampleType=${record.sampleType} mappedSampleType=${mapSampleTypeForWorker(
-          record.sampleType,
-          record.sampleId
-        )} result=${result}`
+        `[evaluation] source=worker modelVersion=${modelVersion} modelType=${record.modelType} heatmap=${record.generateHeatmap} result=${result}`
       );
       return result;
     } catch (error) {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { GenderSchema, SampleTypeSchema } from "../../domain";
+import { GenderSchema } from "../../domain";
 import { NonEmptyStringSchema } from "../primitives.schemas";
 
 export const BaseRecordListRequestSchema = z.object({
@@ -17,15 +17,14 @@ export const BaseRecordCreateRequestSchema = z.object({
   patientName: z.string().optional(),
   patientAge: z.string().optional(),
   patientGender: z.enum(GenderSchema.options),
-  sampleId: NonEmptyStringSchema,
-  sampleType: z.enum(SampleTypeSchema.options),
+  uploadId: z.string().uuid(),
+  slideFileName: NonEmptyStringSchema,
+  slideId: NonEmptyStringSchema,
   samplingDate: NonEmptyStringSchema,
   receptionDate: NonEmptyStringSchema,
   testDate: NonEmptyStringSchema,
-  RPS4Y1: NonEmptyStringSchema,
-  PKHD1L1: NonEmptyStringSchema,
-  CRABP1: NonEmptyStringSchema,
-  GAPDH: NonEmptyStringSchema,
+  modelType: z.enum(["2class", "3class", "5class"]).optional().default("3class"),
+  generateHeatmap: z.boolean().optional().default(false),
   testerName: NonEmptyStringSchema,
   otherInfo: z.string().optional(),
   instituteName: NonEmptyStringSchema,

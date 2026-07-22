@@ -9,13 +9,6 @@ export const Gender = {
   Male: "m"
 } as const satisfies Record<string, Gender>;
 
-export const SampleTypeSchema = z.enum(["q", "r"]);
-export type SampleType = z.infer<typeof SampleTypeSchema>;
-export const SampleType = {
-  QualityContral: "q",
-  Regular: "r"
-} as const satisfies Record<string, SampleType>;
-
 export const EvaluationResultEnumSchema = z.enum(["0", "1", "2", ""]);
 export type EvaluationResultEnum = z.infer<typeof EvaluationResultEnumSchema>;
 export const EvaluationResultEnum = {
@@ -31,15 +24,14 @@ export const RecordDraftSchema = z.object({
   patientName: z.string(),
   patientAge: z.string(),
   patientGender: z.string(),
-  sampleId: z.string(),
-  sampleType: z.string(),
+  uploadId: z.string().uuid(),
+  slideFileName: z.string(),
+  slideId: z.string(),
   samplingDate: z.string(),
   receptionDate: z.string(),
   testDate: z.string(),
-  RPS4Y1: z.string(),
-  PKHD1L1: z.string(),
-  CRABP1: z.string(),
-  GAPDH: z.string(),
+  modelType: z.enum(["2class", "3class", "5class"]),
+  generateHeatmap: z.boolean(),
   testerName: z.string(),
   otherInfo: z.string(),
   instituteName: z.string()

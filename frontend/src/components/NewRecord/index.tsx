@@ -7,13 +7,14 @@ import type {
   MenuProps} from "antd";
 import {
   Button,
+  Descriptions,
   Dropdown,
+  Flex,
   Form,
   Steps,
   Tooltip,
   Typography,
 } from "antd";
-import type { FormInstance, StepsProps } from "antd/lib";
 import dayjs from "dayjs";
 import React, { useEffect, useMemo, useState } from "react";
 /** locales */
@@ -36,17 +37,13 @@ import { getInstituteName, getUsername } from "../../store/user";
 import {
   Gender,
   NewMissionType,
-  SampleType,
 } from "../../types";
 import DraggableModal from "../DraggableModal";
-import GeneInfoForm from "./forms/GeneInfoForm";
-import ReviewForm from "./forms/ReviewForm";
 import SampleSourceForm from "./forms/SampleSourceForm";
 /* styles */
 import styles from "./new-record.module.css";
 import { buildSampleRecordFormItems } from "./newRecordFields";
-import type { FormFieldType, QualityControlType } from "./newRecordTypes";
-import { mergeSampleId } from "./newRecordUtils";
+import type { FormFieldType } from "./newRecordTypes";
 import RecordImportBody from "./RecordImportBody";
 import RecordImportFooter from "./RecordImportFooter";
 const NewRecord: React.FC = () => {
@@ -75,21 +72,17 @@ const NewRecord: React.FC = () => {
     [t]
   );
   const initialFormData: FormFieldType = {
-    sampleId: "",
     patientGender: Gender.None,
-    sampleType: "",
     samplingDate: "",
     receptionDate: "",
-    RPS4Y1: "",
-    PKHD1L1: "",
-    CRABP1: "",
-    GAPDH: "",
     patientName: "",
     patientAge: "",
     doctorName: "",
     testerName: username,
     // confirmed at submit
     otherInfo: "",
+    modelType: "3class",
+    generateHeatmap: false,
   };
   /* state */
   // formData
@@ -97,26 +90,14 @@ const NewRecord: React.FC = () => {
   const [formData, setFormData] = useState<FormFieldType>({
     ...initialFormData,
   });
+  const [pendingFormData, setPendingFormData] = useState<FormFieldType | null>(null);
   // modal
   const [open, setOpen] = useState<boolean>(false);
   const [exitOepn, setExitOpen] = useState<boolean>(false);
   const [submitOpen, setSubmitOpen] = useState<boolean>(false);
+  const [currentStep, setCurrentStep] = useState(0);
   // tab and form
-  const [currentStep, setCurrentStep] = useState<number>(0);
-  const [qualityControlType, setQualityControlType] =
-    useState<QualityControlType>("positive");
   const [sampleSourceFormRef] = Form.useForm();
-  const [geneInfoFormRef] = Form.useForm();
-  const [reviewFormRef] = Form.useForm();
-  const [forms] = useState<FormInstance[]>([
-    sampleSourceFormRef,
-    geneInfoFormRef,
-    reviewFormRef,
-  ]);
-  const watchedSampleType = Form.useWatch(
-    sampleRecordFormItems.sampleType.name,
-    sampleSourceFormRef
-  ) as FormFieldType["sampleType"];
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
   const minModalWidth = Math.round(viewportWidth * 0.6);
   const maxModalWidth = viewportWidth;
@@ -127,87 +108,30 @@ const NewRecord: React.FC = () => {
   // handler
   const resetAllStates = (options?: { resetForms?: boolean }) => {
     const resetForms = options?.resetForms !== false;
-    setCurrentStep(0);
     setOpen(false);
     setExitOpen(false);
     setSubmitOpen(false);
+    setCurrentStep(0);
     setFormData({ ...initialFormData });
+    setPendingFormData(null);
     resetImport();
     if (resetForms) {
-      forms.forEach((form) => form.resetFields());
+      sampleSourceFormRef.resetFields();
     }
   };
   const handleFormReset = () => {
-    forms[currentStep].resetFields();
-  };
-  useEffect(() => {
-    if (watchedSampleType === SampleType.QualityContral) {
-      sampleSourceFormRef.setFieldsValue({
-        samplingDate: null,
-        receptionDate: null,
-        patientGender: Gender.None,
-      });
-      setQualityControlType((prev) => prev || "positive");
-      return;
-    }
-    const nextValues: Record<string, null> = {};
-    const samplingValue = sampleSourceFormRef.getFieldValue(
-      sampleRecordFormItems.samplingDate.name
-    );
-    const receptionValue = sampleSourceFormRef.getFieldValue(
-      sampleRecordFormItems.receptionDate.name
-    );
-    if (samplingValue === "n/a") {
-      nextValues[sampleRecordFormItems.samplingDate.name] = null;
-    }
-    if (receptionValue === "n/a") {
-      nextValues[sampleRecordFormItems.receptionDate.name] = null;
-    }
-    if (Object.keys(nextValues).length) {
-      sampleSourceFormRef.setFieldsValue(nextValues);
-    }
-  }, [
-    watchedSampleType,
-    sampleSourceFormRef,
-    sampleRecordFormItems.samplingDate.name,
-    sampleRecordFormItems.receptionDate.name,
-  ]);
-  const handleNext = async () => {
-    try {
-      const formValues = await forms[currentStep].validateFields();
-      if (
-        currentStep === 0 &&
-        formValues[sampleRecordFormItems.sampleType.name] ===
-          SampleType.QualityContral
-      ) {
-        formValues[sampleRecordFormItems.samplingDate.name] = "n/a";
-        formValues[sampleRecordFormItems.receptionDate.name] = "n/a";
-      }
-      Object.keys(formValues).forEach((key) => {
-        if (!formValues[key]) {
-          formValues[key] = "n/a";
-        }
-        if (key === "samplingDate" || key === "receptionDate") {
-          if (formValues[key] !== "n/a") {
-            formValues[key] = dayjs(formValues[key]).format("YYYY-MM-DD");
-          }
-        }
-      });
-      setFormData((prev) => ({ ...prev, ...formValues }));
-      setCurrentStep(currentStep + 1);
-    } catch (error) {}
-  };
-  const handlePrevious = () => {
-    setCurrentStep(currentStep - 1);
+    sampleSourceFormRef.resetFields();
   };
   const handleReviewSubmit = async () => {
     try {
-      const formValues = await forms[currentStep].validateFields();
-      setFormData((prev) => ({
-        ...prev,
-        ...formValues,
-      }));
-      setSubmitOpen(true);
+      const formValues = await sampleSourceFormRef.validateFields();
+      for (const key of ["samplingDate", "receptionDate"] as const) {
+        formValues[key] = formValues[key] ? dayjs(formValues[key]).format("YYYY-MM-DD") : "";
+      }
+      const next = { ...formData, ...formValues } as FormFieldType;
+      setFormData(next);
+      setPendingFormData(next);
+      setCurrentStep(1);
     } catch (error) {}
   };
   const closeModal = () => {
@@ -223,37 +147,67 @@ const NewRecord: React.FC = () => {
     setSubmitOpen(false);
   };
   const handleConfirmSubmit = async () => {
-    console.log("finally", formData);
-    if (!formData.sampleType) {
-      return;
-    }
+    const data = pendingFormData;
+    const uploadFile = (data as any)?.slideFile?.[0]?.originFileObj as File | undefined;
+    if (!data || !uploadFile) return;
     const current = dayjs().toISOString();
-    const mergedSampleId = mergeSampleId(
-      formData.sampleId,
-      formData.sampleType,
-      qualityControlType
-    );
+    type UploadState = { uploadId: string; chunkSize: number; totalChunks: number; uploadedChunks: number[] };
+    const resumeKey = `ret-svs-upload:${uploadFile.name}:${uploadFile.size}:${uploadFile.lastModified}`;
+    let upload: UploadState | null = null;
+    const previousUploadId = localStorage.getItem(resumeKey);
+    if (previousUploadId) {
+      const statusResponse = await fetch(`/api/uploads/${previousUploadId}/status`, { credentials: "include" });
+      if (statusResponse.ok) upload = await statusResponse.json() as UploadState;
+    }
+    if (!upload) {
+      const initResponse = await fetch("/api/uploads/init", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ fileName: uploadFile.name, fileSize: uploadFile.size }),
+      });
+      if (!initResponse.ok) throw new Error("failed to initialize SVS upload");
+      upload = await initResponse.json() as UploadState;
+      localStorage.setItem(resumeKey, upload.uploadId);
+    }
+    for (let index = 0; index < upload.totalChunks; index += 1) {
+      if (upload.uploadedChunks.includes(index)) continue;
+      const chunk = uploadFile.slice(index * upload.chunkSize, Math.min(uploadFile.size, (index + 1) * upload.chunkSize));
+      const response = await fetch(`/api/uploads/${upload.uploadId}/chunks/${index}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "content-type": "application/octet-stream" },
+        body: chunk,
+      });
+      if (!response.ok) throw new Error(`SVS chunk ${index} upload failed`);
+    }
+    const completeResponse = await fetch(`/api/uploads/${upload.uploadId}/complete`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    if (!completeResponse.ok) throw new Error("failed to complete SVS upload");
+    localStorage.removeItem(resumeKey);
     const payload = {
       /*sample source basics */
-      sampleId: mergedSampleId,
-      sampleType: formData.sampleType,
-      samplingDate: formData.samplingDate,
-      receptionDate: formData.receptionDate,
-      patientGender: formData.patientGender,
+      uploadId: upload.uploadId,
+      slideFileName: uploadFile.name,
+      slideId: uploadFile.name.replace(/\.svs$/i, ""),
+      samplingDate: data.samplingDate,
+      receptionDate: data.receptionDate,
+      patientGender: data.patientGender,
       hospitalName: instituteName,
-      patientName: formData.patientName,
-      patientAge: formData.patientAge,
-      doctorName: formData.doctorName,
-      /* gene */
-      PKHD1L1: formData.PKHD1L1,
-      RPS4Y1: formData.RPS4Y1,
-      CRABP1: formData.CRABP1,
-      GAPDH: formData.GAPDH,
+      patientName: data.patientName,
+      patientAge: data.patientAge,
+      doctorName: data.doctorName,
       testDate: current,
       /* review */
       testerName: username,
-      otherInfo: formData.otherInfo,
+      otherInfo: data.otherInfo,
       instituteName: instituteName,
+      modelType: data.modelType ?? "3class",
+      generateHeatmap: data.generateHeatmap ?? false,
     };
 
     const sessionKey = "evaluation_job_single_mvp";
@@ -352,58 +306,48 @@ const NewRecord: React.FC = () => {
       xxl: { span: 24 },
     },
   };
-  const steps = [
-    {
-      key: t("newRecord_sampleSource"),
-      content: (
-        <SampleSourceForm
-          form={sampleSourceFormRef}
-          formItemLayout={formItemLayout}
-          items={sampleRecordFormItems}
-          watchedSampleType={watchedSampleType}
-          qualityControlType={qualityControlType}
-          setQualityControlType={setQualityControlType}
-          onReset={handleFormReset}
-          onNext={handleNext}
-          t={t}
-        />
-      ),
-    },
-    {
-      key: t("newRecord_geneInfo"),
-      content: (
-        <GeneInfoForm
-          form={geneInfoFormRef}
-          formItemLayout={formItemLayout}
-          items={sampleRecordFormItems}
-          username={username}
-          onReset={handleFormReset}
-          onPrevious={handlePrevious}
-          onNext={handleNext}
-          t={t}
-        />
-      ),
-    },
-    {
-      key: t("newRecord_review"),
-      content: (
-        <ReviewForm
-          form={reviewFormRef}
-          formItemLayout={formItemLayout}
-          items={sampleRecordFormItems}
-          formData={formData}
-          qualityControlType={qualityControlType}
-          onPrevious={handlePrevious}
-          onSubmit={handleReviewSubmit}
-          t={t}
-        />
-      ),
-    },
-  ];
-  const stepItems: StepsProps["items"] = Object.values(steps).map((item) => ({
-    key: item.key,
-    title: item.key,
-  }));
+  const newRecordForm = (
+    <SampleSourceForm
+      form={sampleSourceFormRef}
+      formItemLayout={formItemLayout}
+      items={sampleRecordFormItems}
+      onReset={handleFormReset}
+      onSubmit={handleReviewSubmit}
+      t={t}
+    />
+  );
+  const selectedFile = (pendingFormData as any)?.slideFile?.[0]?.originFileObj as File | undefined;
+  const previewItems = pendingFormData ? [
+    { key: "file", label: t("newRecord_slideFile"), children: selectedFile ? `${selectedFile.name} (${(selectedFile.size / 1024 / 1024).toFixed(1)} MB)` : "-" },
+    { key: "patient", label: sampleRecordFormItems.patientName.label, children: pendingFormData.patientName || t("newRecord_notAvailable") },
+    { key: "gender", label: sampleRecordFormItems.patientGender.label, children: pendingFormData.patientGender === Gender.Male ? t("newRecord_sampleSource_patientGender_male") : pendingFormData.patientGender === Gender.Female ? t("newRecord_sampleSource_patientGender_female") : t("newRecord_notAvailable") },
+    { key: "age", label: sampleRecordFormItems.patientAge.label, children: pendingFormData.patientAge || t("newRecord_notAvailable") },
+    { key: "doctor", label: sampleRecordFormItems.doctorName.label, children: pendingFormData.doctorName || t("newRecord_notAvailable") },
+    { key: "sampling", label: sampleRecordFormItems.samplingDate.label, children: pendingFormData.samplingDate || t("newRecord_notAvailable") },
+    { key: "reception", label: sampleRecordFormItems.receptionDate.label, children: pendingFormData.receptionDate || t("newRecord_notAvailable") },
+    { key: "model", label: sampleRecordFormItems.modelType.label, children: t(`newRecord_modelType_${pendingFormData.modelType}`) },
+    { key: "heatmap", label: sampleRecordFormItems.generateHeatmap.label, children: t(pendingFormData.generateHeatmap ? "newRecord_generateHeatmap_yes" : "newRecord_generateHeatmap_no") },
+    { key: "other", label: sampleRecordFormItems.otherInfo.label, children: pendingFormData.otherInfo || t("newRecord_notAvailable") },
+  ] : [];
+  const newRecordContent = (
+    <>
+      <Steps
+        size="small"
+        current={currentStep}
+        items={[{ title: t("newRecord_recordAndAnalysis") }, { title: t("newRecord_review") }]}
+        style={{ margin: "12px 0 8px" }}
+      />
+      {currentStep === 0 ? newRecordForm : (
+        <Flex vertical gap={16} style={{ maxHeight: "calc(100vh - 240px)", overflowY: "auto", padding: "8px 4px" }}>
+          <Descriptions bordered size="small" column={2} items={previewItems} />
+          <Flex justify="space-between">
+            <Button onClick={() => setCurrentStep(0)}>{t("newRecord_previous")}</Button>
+            <Button type="primary" onClick={() => setSubmitOpen(true)}>{t("newRecord_submit")}</Button>
+          </Flex>
+        </Flex>
+      )}
+    </>
+  );
   // drop down button
   const [newMissionType, setNewMissionType] = useState<NewMissionType>(
     NewMissionType.AddOne
@@ -642,39 +586,21 @@ const NewRecord: React.FC = () => {
   };
   return (
     <>
-      <Dropdown
-        className={styles.new_record_button}
-        menu={{ items: addButtonItems }}
-        arrow
-        trigger={["click"]}
-        disabled={isQueueBusy}
-      >
-        <Tooltip
-          title={isQueueBusy ? t("newRecord_queueBusy_tooltip") : ""}
+      <Tooltip title={isQueueBusy ? t("newRecord_queueBusy_tooltip") : ""}>
+        <Button
+          className={styles.new_record_button}
+          type="primary"
+          icon={<PlusCircleOutlined />}
+          disabled={isQueueBusy}
+          data-testid="new-record-open"
+          onClick={handleOnClickAddOne}
         >
-          <span>
-            <Button
-              type="primary"
-              icon={<PlusCircleOutlined />}
-              disabled={isQueueBusy}
-              data-testid="new-record-open"
-            >
-              {t("newRecord_addNewRecord")}
-            </Button>
-          </span>
-        </Tooltip>
-      </Dropdown>
+          {t("newRecord_addNewRecord")}
+        </Button>
+      </Tooltip>
       <DraggableModal
         width={modalWidth}
-        title={
-          newMissionType === NewMissionType.AddOne ? (
-            t("newRecord_addOneTitle")
-          ) : (
-            <Typography.Text style={{ fontSize: 16 }}>
-              {t("newRecord_importManyTitle")}
-            </Typography.Text>
-          )
-        }
+        title={t("newRecord_addOneTitle")}
         open={open}
         onCancel={closeModal}
         style={{
@@ -684,97 +610,9 @@ const NewRecord: React.FC = () => {
         }}
         destroyOnHidden
         centered
-        footer={[
-          newMissionType === NewMissionType.ImportMany && (
-            <RecordImportFooter
-              key="importFooterContainer"
-              t={t}
-              disableSubmit={
-                !importRecords.length || importStatus === "parsing"
-              }
-              submitLoading={importStatus === "parsing"}
-              onCancel={closeModal}
-              onSubmit={handleSubmitUpload}
-              onBeforeUpload={async (file) => {
-                try {
-                  const ret = await parseFile(file, (item) => ({
-                    ...item,
-                    instituteName,
-                    testerName: username,
-                  }));
-                  dispatch(
-                    pushNotification({
-                      type: "success",
-                      message: "notification_importFile_success_message",
-                      description: "",
-                    })
-                  );
-                  if (!ret.length) {
-                    dispatch(
-                      pushNotification({
-                        type: "error",
-                        message: "notification_importFile_error_message",
-                        description: "notification_importFile_error_description",
-                      })
-                    );
-                    resetImport();
-                  }
-                } catch (error) {
-                  dispatch(
-                    pushNotification({
-                      type: "error",
-                      message: "notification_importFile_error_message",
-                      description: "notification_importFile_error_description",
-                    })
-                  );
-                }
-                return false;
-              }}
-              onRemove={() => resetImport()}
-              onDownloadTemplate={async () => {
-                try {
-                  const result = await api.download(`template_${locale}.csv`);
-                  if (!result.canceled) {
-                    dispatch(
-                      pushNotification({
-                        type: "success",
-                        message: "notification_download_success_message",
-                        description: "",
-                      })
-                    );
-                  }
-                } catch (error) {
-                  dispatch(
-                    pushNotification({
-                      type: "error",
-                      message: "notification_download_error_message",
-                      description: "",
-                    })
-                  );
-                }
-              }}
-            />
-          ),
-        ]}
+        footer={null}
       >
-        {newMissionType === NewMissionType.AddOne ? (
-          <>
-            <Steps
-              labelPlacement="vertical"
-              current={currentStep}
-              items={stepItems}
-              style={{ marginTop: 20 }}
-            />
-            {steps[currentStep].content}
-          </>
-        ) : (
-          <>
-            <RecordImportBody
-              filename={importFilename}
-              formItemLayout={formItemLayout}
-            />
-          </>
-        )}
+        {newRecordContent}
       </DraggableModal>
       <DraggableModal
         width={"30%"}

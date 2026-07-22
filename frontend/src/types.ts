@@ -28,13 +28,11 @@ import type {
 import type {
   EvaluationResultEnum as DomainEvaluationResult,
   Gender as DomainGenderValue,
-  SampleType as DomainSampleTypeValue,
   UserRole as SharedUserRole
 } from "@villanelle/ret-shared/domain";
 import {
   EvaluationResultEnum as DomainEvaluationResultEnum,
   Gender as DomainGender,
-  SampleType as DomainSampleType
 } from "@villanelle/ret-shared/domain";
 export interface ElectronRuntime {
   isElectronRuntime: boolean;
@@ -121,8 +119,6 @@ export type RegisterResponsePayload = UserState;
 /* Record */
 export const Gender = DomainGender;
 export type Gender = DomainGenderValue;
-export const SampleType = DomainSampleType;
-export type SampleType = DomainSampleTypeValue;
 export enum NewMissionType {
   AddOne = "addOne",
   ImportMany = "importMany",

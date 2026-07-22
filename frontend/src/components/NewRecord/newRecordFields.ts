@@ -1,14 +1,10 @@
 import type { TFunction } from "i18next";
-import { Gender, SampleType } from "../../types";
+import { Gender } from "../../types";
 import type { SampleRecordFormItems } from "./newRecordTypes";
 export const buildSampleRecordFormItems = (
   t: TFunction
 ): SampleRecordFormItems => ({
   /* sample source required*/
-  sampleId: {
-    name: "sampleId",
-    label: t("newRecord_sampleSource_sampleId"),
-  },
   patientGender: {
     name: "patientGender",
     label: t("newRecord_sampleSource_patientGender"),
@@ -29,13 +25,6 @@ export const buildSampleRecordFormItems = (
     name: "patientAge",
     label: t("newRecord_sampleSource_patientAge"),
   },
-  sampleType: {
-    name: "sampleType",
-    label: t("newRecord_sampleSource_sampleType"),
-    valuePresentation: {
-      [`${SampleType.Regular}`]: t("newRecord_sampleSource_sampleType_regular"),
-    },
-  },
   samplingDate: {
     name: "samplingDate",
     label: t("newRecord_sampleSource_samplingDate"),
@@ -44,22 +33,14 @@ export const buildSampleRecordFormItems = (
     name: "receptionDate",
     label: t("newRecord_sampleSource_receptionDate"),
   },
-  /* gene */
-  RPS4Y1: {
-    name: "RPS4Y1",
-    label: t("newRecord_geneInfo_RPS4Y1"),
+  /* analysis options */
+  modelType: {
+    name: "modelType",
+    label: t("newRecord_modelType"),
   },
-  PKHD1L1: {
-    name: "PKHD1L1",
-    label: t("newRecord_geneInfo_PKHD1L1"),
-  },
-  CRABP1: {
-    name: "CRABP1",
-    label: t("newRecord_geneInfo_CRABP1"),
-  },
-  GAPDH: {
-    name: "GAPDH",
-    label: t("newRecord_geneInfo_GAPDH"),
+  generateHeatmap: {
+    name: "generateHeatmap",
+    label: t("newRecord_generateHeatmap"),
   },
   /* review */
   testerName: {

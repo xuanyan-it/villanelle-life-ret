@@ -1,22 +1,17 @@
 import type { RecordRepositoryPort } from "../domain";
 import { ensure, type QueryResult, type RecordDraft, type RecordUpdate, type SampleRecord } from "../domain";
 
-export type EvaluateRecordFn = (
-  PKHD1L1: string,
-  RPS4Y1: string,
-  CRABP1: string,
-  GAPDH: string,
-  record: RecordDraft
-) => string | Promise<string>;
+export type EvaluateRecordFn = (record: RecordDraft) => string | Promise<string>;
 
 export const createRecord = async (
   payload: RecordDraft,
   repository: Pick<RecordRepositoryPort, "create">,
   evaluate: EvaluateRecordFn
 ): Promise<SampleRecord> => {
-  ensure(Boolean(payload.sampleId), "sampleId is required");
+  ensure(Boolean(payload.uploadId), "uploadId is required");
+  ensure(Boolean(payload.slideFileName), "slideFileName is required");
   ensure(Boolean(payload.instituteName), "instituteName is required");
-  const result = await evaluate(payload.PKHD1L1, payload.RPS4Y1, payload.CRABP1, payload.GAPDH, payload);
+  const result = await evaluate(payload);
   return repository.create(payload, result);
 };
 
@@ -47,7 +42,7 @@ export const updateRecord = async (
   repository: Pick<RecordRepositoryPort, "update">
 ): Promise<boolean> => {
   ensure(Boolean(payload.uuid), "uuid is required");
-  ensure(Boolean(payload.sampleId), "sampleId is required");
+  ensure(Boolean(payload.uploadId), "uploadId is required");
   ensure(Boolean(payload.instituteName), "instituteName is required");
   return repository.update(payload);
 };
