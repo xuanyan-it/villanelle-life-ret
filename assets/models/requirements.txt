@@ -1,0 +1,22 @@
+# CLAM model dependencies (converted from env.yml)
+# Python 3.10 required
+#
+# System prerequisite (Windows):
+#   OpenSlide binaries: https://openslide.org/download/
+#   Download and extract to a known location, e.g. C:\openslide
+#   Then: set OPENSLIDE_PATH=C:\openslide\bin
+
+timm==0.9.8
+torch
+torchvision
+h5py
+pandas
+PyYAML
+opencv-python
+matplotlib
+scikit-learn
+scipy
+tqdm
+openslide-python
+tensorboardX
+topk @ git+https://github.com/oval-group/smooth-topk.git

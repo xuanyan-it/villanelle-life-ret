@@ -2,7 +2,7 @@ import type { ModelConfigPayload } from "../types";
 import { api } from "../api";
 const PLACEHOLDER_MODEL_CONFIG: ModelConfigPayload = {
   modelVersion: "LNM-0.0",
-  resultPositiveThreshold: 0
+  resultPositiveThreshold: 0.5
 };
 let currentModelConfig: ModelConfigPayload = { ...PLACEHOLDER_MODEL_CONFIG };
 let loadingPromise: Promise<void> | null = null;

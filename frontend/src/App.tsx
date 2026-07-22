@@ -121,7 +121,9 @@ const App = () => {
       })
       .catch(() => {
         if (!canceled) {
-          setModelConfigStatus("error");
+          // Model not yet integrated — proceed with placeholder, don't block UI
+          console.warn("Model config unavailable, using placeholder values.");
+          setModelConfigStatus("ready");
         }
       });
     return () => {

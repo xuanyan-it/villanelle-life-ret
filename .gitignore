@@ -76,6 +76,7 @@ web_modules/
 # dotenv environment variable files
 .env
 .env.development.local
+.env.development
 .env.test.local
 .env.production.local
 .env.local
@@ -133,8 +134,11 @@ dist
 # build
 /build
 
-# local model venv
+# local model venv (old path — keep for history)
 /model/venv.portable.thyromet/
+
+# uv / standard Python venv
+.venv/
 
 # Python bytecode caches
 __pycache__/
@@ -163,6 +167,18 @@ frontend/test-results/
 electron/test-results/
 electron/build/
 
-# Local model runtime virtualenv
-assets/models/venv-LMN-1.0/
+# Local model runtime — ignore model files but track configs
+assets/models/*
+!assets/models/requirements.txt
+!assets/models/requirements.lock.txt
+!assets/models/model.config.json
+!assets/models/worker.py
+!assets/models/evaluation.py
+!assets/models/run_full_pipeline.py
+!assets/models/create_patches_fp.py
+!assets/models/extract_features_fp.py
+assets/openslide
+
+# OpenSlide DLLs are tracked for USB offline deployment
+# (downloaded manually: https://github.com/openslide/openslide-bin/releases)
 .vscode/
