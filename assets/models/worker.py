@@ -502,12 +502,10 @@ def handle_message(line: str) -> None:
 
 def run_stdio_loop() -> None:
     """Announce ready, then process stdin line-by-line."""
-    try:
-        load_model()
-        write_line({"type": "ready", "ok": True})
-    except Exception:
-        write_line({"type": "ready", "ok": False, "error": traceback.format_exc()})
-        sys.exit(1)
+    # The model type is supplied per request. Loading here would either choose
+    # the wrong checkpoint or require a model type before the request exists.
+    # Each requested checkpoint is validated and lazily cached in load_model().
+    write_line({"type": "ready", "ok": True})
 
     for line in sys.stdin:
         stripped = line.strip()
