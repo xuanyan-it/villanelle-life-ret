@@ -34,6 +34,9 @@ export class UploadController {
     @Param("uploadId") uploadId: string
   ) {
     const heatmapPath = await this.uploads.heatmapPath(uploadId, ownerOf(request));
+    if (!heatmapPath) {
+      return response.status(204).send();
+    }
     response.setHeader("Cache-Control", "private, no-store");
     return response.sendFile(heatmapPath);
   }

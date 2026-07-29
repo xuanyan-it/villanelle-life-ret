@@ -104,14 +104,17 @@ export class UploadService {
     return this.readMetadata(uploadId, owner);
   }
 
-  async heatmapPath(uploadId: string, owner: string): Promise<string> {
+  async heatmapPath(uploadId: string, owner: string): Promise<string | null> {
     await this.readMetadata(uploadId, owner);
     const heatmapPath = path.join(this.uploadDir(uploadId), "output", "heatmap.png");
     try {
       await fs.access(heatmapPath);
       return heatmapPath;
     } catch {
-      throw new NotFoundException("heatmap not found");
+      // A requested heatmap is created only after evaluation finishes. Missing
+      // output is therefore a normal pending/unavailable state, not a server
+      // exception. Unknown uploads are still rejected by readMetadata above.
+      return null;
     }
   }
 
