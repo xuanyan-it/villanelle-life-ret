@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Put, Req } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Put, Req, Res } from "@nestjs/common";
 import { z } from "zod";
-import type { Request } from "express";
+import type { Request, Response } from "express";
 
 import { ZodValidationPipe } from "../../common/http/pipes/zod-validation.pipe";
 import { UploadService } from "./upload.service";
@@ -25,6 +25,17 @@ export class UploadController {
   @Get("/:uploadId/status")
   status(@Req() request: Request, @Param("uploadId") uploadId: string) {
     return this.uploads.status(uploadId, ownerOf(request));
+  }
+
+  @Get("/:uploadId/heatmap")
+  async heatmap(
+    @Req() request: Request,
+    @Res() response: Response,
+    @Param("uploadId") uploadId: string
+  ) {
+    const heatmapPath = await this.uploads.heatmapPath(uploadId, ownerOf(request));
+    response.setHeader("Cache-Control", "private, no-store");
+    return response.sendFile(heatmapPath);
   }
 
   @Put("/:uploadId/chunks/:index")

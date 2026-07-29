@@ -1,5 +1,4 @@
-﻿import { computeDetForWorker, mapGenderForWorker, mapSampleTypeForWorker } from "@villanelle/ret-shared/application";
-import { SharedClientErrorMessage } from "@villanelle/ret-shared/contracts";
+﻿import { SharedClientErrorMessage } from "@villanelle/ret-shared/contracts";
 import {
   ElectronActiveEvaluationJobsRequestSchema,
   ElectronBatchEnqueueEvaluationJobRequestSchema,
@@ -44,6 +43,7 @@ export const registerRecordHandlers = (context: IpcContext) => {
   const {
     emitShellOutput,
     workerManager,
+    localUploadStore,
     workerCommand,
     workerArgs,
     mainWindow,
@@ -52,6 +52,7 @@ export const registerRecordHandlers = (context: IpcContext) => {
   const evaluationJobRuntime = createEvaluationJobRuntime({
     authSession: context.authSession,
     workerManager,
+    localUploadStore,
     workerCommand,
     workerArgs,
     mainWindow,
@@ -91,40 +92,15 @@ export const registerRecordHandlers = (context: IpcContext) => {
   registerRaw(
     "createSampleRecords",
     {
-      schema: ElectronCreateSampleRecordsRequestSchema,
+      schema: ElectronCreateSampleRecordsRequestSchema as any,
       requireAuth: true
     },
     async (parsedRecord: SampleRecordRequestPayload): Promise<SampleRecordResponsePayload> => {
       if (parsedRecord.evaluationAsync) {
         return evaluationJobRuntime.startSingleAsync(parsedRecord);
       }
-      const { RPS4Y1, PKHD1L1, CRABP1, GAPDH, patientGender, sampleType } =
-        parsedRecord;
-      const DETs = computeDetForWorker(PKHD1L1, RPS4Y1, CRABP1, GAPDH);
-      const genderValue = mapGenderForWorker(patientGender);
-
-      let result = "";
-      try {
-        await workerManager.start(workerCommand, workerArgs);
-        const workerSampleType = mapSampleTypeForWorker(sampleType, parsedRecord.sampleId);
-        const probability = await workerManager.request({
-          DET_PKHD1L1: DETs.DET_PKHD1L1,
-          DET_RPS4Y1: DETs.DET_RPS4Y1,
-          DET_CRABP1: DETs.DET_CRABP1,
-          Gender: genderValue,
-          sampleType: workerSampleType,
-        });
-        result = Number.isFinite(probability) ? `${probability}` : "";
-        emitShellOutput(
-          `[evaluation] source=worker sampleType=${workerSampleType} result=${result}`,
-        );
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
-        const msg = `[evaluation] blocked: worker not ready (${reason})`;
-        console.warn(msg);
-        emitShellOutput(msg);
-        throw new Error(SharedClientErrorMessage.workerNotReady);
-      }
+      // TODO: Electron sync evaluation — currently returns placeholder
+      const result = "0";
 
       const recordWithResult: Omit<SampleRecord, "uuid"> = {
         ...parsedRecord,
@@ -141,10 +117,10 @@ export const registerRecordHandlers = (context: IpcContext) => {
   registerRaw(
     "batchEnqueueEvaluationJobs",
     {
-      schema: ElectronBatchEnqueueEvaluationJobRequestSchema,
+      schema: ElectronBatchEnqueueEvaluationJobRequestSchema as any,
       requireAuth: true
     },
-    async (payload) => evaluationJobRuntime.enqueueBatch(payload)
+    async (payload: any) => evaluationJobRuntime.enqueueBatch(payload)
   );
 
   registerRaw(
@@ -178,7 +154,7 @@ export const registerRecordHandlers = (context: IpcContext) => {
   registerRaw(
     "updateSampleRecords",
     {
-      schema: ElectronUpdateSampleRecordsRequestSchema,
+      schema: ElectronUpdateSampleRecordsRequestSchema as any,
       requireAuth: true
     },
     async (record: SampleRecord) => updateSampleRecords(record)

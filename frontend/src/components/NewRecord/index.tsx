@@ -21,6 +21,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
 import { api } from "../../api";
+import type { UploadState } from "../../api/types";
 import { useBatchProgress } from "../../hooks/useBatchProgress";
 import { useRecordImport } from "../../hooks/useRecordImport";
 import type { AppDispatch, RootState } from "../../store";
@@ -151,43 +152,22 @@ const NewRecord: React.FC = () => {
     const uploadFile = (data as any)?.slideFile?.[0]?.originFileObj as File | undefined;
     if (!data || !uploadFile) return;
     const current = dayjs().toISOString();
-    type UploadState = { uploadId: string; chunkSize: number; totalChunks: number; uploadedChunks: number[] };
     const resumeKey = `ret-svs-upload:${uploadFile.name}:${uploadFile.size}:${uploadFile.lastModified}`;
     let upload: UploadState | null = null;
     const previousUploadId = localStorage.getItem(resumeKey);
     if (previousUploadId) {
-      const statusResponse = await fetch(`/api/uploads/${previousUploadId}/status`, { credentials: "include" });
-      if (statusResponse.ok) upload = await statusResponse.json() as UploadState;
+      upload = await api.uploadStatus(previousUploadId);
     }
     if (!upload) {
-      const initResponse = await fetch("/api/uploads/init", {
-        method: "POST",
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ fileName: uploadFile.name, fileSize: uploadFile.size }),
-      });
-      if (!initResponse.ok) throw new Error("failed to initialize SVS upload");
-      upload = await initResponse.json() as UploadState;
+      upload = await api.uploadInit(uploadFile.name, uploadFile.size);
       localStorage.setItem(resumeKey, upload.uploadId);
     }
     for (let index = 0; index < upload.totalChunks; index += 1) {
       if (upload.uploadedChunks.includes(index)) continue;
       const chunk = uploadFile.slice(index * upload.chunkSize, Math.min(uploadFile.size, (index + 1) * upload.chunkSize));
-      const response = await fetch(`/api/uploads/${upload.uploadId}/chunks/${index}`, {
-        method: "PUT",
-        credentials: "include",
-        headers: { "content-type": "application/octet-stream" },
-        body: chunk,
-      });
-      if (!response.ok) throw new Error(`SVS chunk ${index} upload failed`);
+      await api.uploadChunk(upload.uploadId, index, chunk);
     }
-    const completeResponse = await fetch(`/api/uploads/${upload.uploadId}/complete`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "content-type": "application/json" },
-      body: "{}",
-    });
-    if (!completeResponse.ok) throw new Error("failed to complete SVS upload");
+    await api.uploadComplete(upload.uploadId);
     localStorage.removeItem(resumeKey);
     const payload = {
       /*sample source basics */

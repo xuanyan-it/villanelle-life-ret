@@ -12,6 +12,7 @@ import {
   Dropdown,
   Flex,
   Form,
+  Image,
   Input,
   Pagination,
   Row,
@@ -65,13 +66,81 @@ import { buildCsvContent, objectArr2csv } from "../../utils/recordParser";
 import DraggableModal from "../DraggableModal";
 import {
   filterVisibleRecords,
-  getResultLabelKey,
-  getResultTagColor,
-  isEvaluationResultAvailable,
 } from "./recordTable.logic";
 import styles from "./record-table.module.css";
 // import { ellipsisText } from "../../utils/ellipsisText";
 // import { openReportPreviewer } from "../../store/reportPreviewer";
+
+const HeatmapPreview = ({
+  uploadId,
+  enabled,
+}: {
+  uploadId: string;
+  enabled: boolean;
+}) => {
+  const { t } = useTranslation();
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [src, setSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setLoadFailed(false);
+    setSrc(null);
+    if (!enabled || !uploadId) {
+      return () => {
+        active = false;
+      };
+    }
+    void api
+      .heatmapSource(uploadId)
+      .then((value) => {
+        if (active) {
+          setSrc(value);
+          setLoadFailed(!value);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setLoadFailed(true);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [enabled, uploadId]);
+
+  if (!enabled) {
+    return (
+      <Typography.Text type="secondary">
+        {t("recordTable_geneInfo_heatmapNotRequested")}
+      </Typography.Text>
+    );
+  }
+  if (loadFailed) {
+    return (
+      <Typography.Text type="secondary">
+        {t("recordTable_geneInfo_heatmapUnavailable")}
+      </Typography.Text>
+    );
+  }
+  if (!src) {
+    return <Typography.Text type="secondary">...</Typography.Text>;
+  }
+
+  return (
+    <div className={styles.heatmapPreview} data-testid="record-detail-heatmap">
+      <Image
+        src={src}
+        alt={t("recordTable_geneInfo_heatmap")}
+        width="100%"
+        className={styles.heatmapImage}
+        onError={() => setLoadFailed(true)}
+        preview={{ mask: t("recordTable_geneInfo_heatmapPreview") }}
+      />
+    </div>
+  );
+};
+
 const RecordTable = () => {
   const ref = useRef<ActionType>();
   const pageChangeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -252,20 +321,26 @@ const RecordTable = () => {
       {
         key: "18",
         label: t("recordTable_geneInfo_evaluationResult"),
-        children: isEvaluationResultAvailable(record.result) ? (() => {
-          const labelKey = getResultLabelKey(record.result);
-          const color = getResultTagColor(record.result);
-          return record.isDeleted ? (
-            <Tag color="default">
-              <span style={{ textDecoration: "line-through", color: "#666" }}>
-                {labelKey ? t(labelKey) : record.result}
-              </span>
-            </Tag>
-          ) : (
-            <Tag color={color}>{labelKey ? t(labelKey) : record.result}</Tag>
-          );
-        })() : (
-          <Tag color="default">{t("recordTable_notAvailable")}</Tag>
+        children: record.isDeleted ? (
+          <Tag color="default">
+            <span style={{ textDecoration: "line-through", color: "#666" }}>
+              {record.result || t("recordTable_notAvailable")}
+            </span>
+          </Tag>
+        ) : (
+          <Tag color="default">
+            {record.result || t("recordTable_notAvailable")}
+          </Tag>
+        ),
+      },
+      {
+        key: "18-heatmap",
+        label: t("recordTable_geneInfo_heatmap"),
+        children: (
+          <HeatmapPreview
+            uploadId={record.uploadId}
+            enabled={record.generateHeatmap}
+          />
         ),
       },
     ];
@@ -552,26 +627,18 @@ const RecordTable = () => {
       title: t("recordTable_geneInfo_evaluationResult"),
       dataIndex: "result",
       key: "result",
-      render: (text, record, index) => {
-        const labelKey = getResultLabelKey(record.result);
-        if (!labelKey) {
-          return (
-            <Tag color="default">
-              {record.result || t("recordTable_notAvailable")}
-            </Tag>
-          );
-        }
-        const color = getResultTagColor(record.result);
-        return record.isDeleted ? (
+      render: (text, record) =>
+        record.isDeleted ? (
           <Tag color="default">
             <span style={{ textDecoration: "line-through", color: "#666" }}>
-              {t(labelKey)}
+              {record.result || t("recordTable_notAvailable")}
             </span>
           </Tag>
         ) : (
-          <Tag color={color}>{t(labelKey)}</Tag>
-        );
-      },
+          <Tag color="default">
+            {record.result || t("recordTable_notAvailable")}
+          </Tag>
+        ),
       align: "center",
       width: 80,
     },
@@ -897,6 +964,7 @@ const RecordTable = () => {
             items={geneInfoDescriptionItems}
             bordered
             layout="vertical"
+            column={{ xs: 1, sm: 1, md: 2 }}
           />
           <Divider orientation="left">{t("recordTable_review")}</Divider>
           <Descriptions

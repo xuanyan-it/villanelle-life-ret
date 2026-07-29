@@ -41,7 +41,7 @@ type WorkerPredictPayload = {
 };
 
 type PendingRequest = {
-  resolve: (value: number) => void;
+  resolve: (value: string) => void;
   reject: (reason: Error) => void;
 };
 
@@ -187,7 +187,7 @@ class PythonWorkerClient {
             if (!pending) return;
             this.workerPending.delete(id);
             if (message?.ok) {
-              pending.resolve(Number(message.result));
+              pending.resolve(String(message.result ?? ""));
             } else {
               pending.reject(new Error(message?.error ?? "worker response error"));
             }
@@ -233,7 +233,7 @@ class PythonWorkerClient {
     });
   }
 
-  async request(payload: WorkerPredictPayload): Promise<number> {
+  async request(payload: WorkerPredictPayload): Promise<string> {
     await this.ensureReady();
     const proc = this.workerProcess;
     if (!proc || !proc.stdin) {
@@ -241,7 +241,7 @@ class PythonWorkerClient {
     }
     const id = String(++this.workerRequestSeq);
     const message = JSON.stringify({ id, cmd: "predict", ...payload });
-    return await new Promise<number>((resolve, reject) => {
+    return await new Promise<string>((resolve, reject) => {
       this.workerPending.set(id, { resolve, reject });
       proc.stdin.write(`${message}\n`);
     });
@@ -302,14 +302,13 @@ export class PythonRecordEvaluator implements RecordEvaluator, OnModuleDestroy {
       this.workerClient.setOnProgress((pct, step) => {
         this.logger.log(`[evaluation] progress ${pct}% — ${step}`);
       });
-      const probability = await this.workerClient.request({
+      const result = await this.workerClient.request({
         modelType: record.modelType,
         generateHeatmap: record.generateHeatmap,
         uploadId: record.uploadId,
         slidePath
       });
 
-      const result = Number.isFinite(probability) ? `${probability}` : "";
       this.logger.log(
         `[evaluation] source=worker modelVersion=${modelVersion} modelType=${record.modelType} heatmap=${record.generateHeatmap} result=${result}`
       );

@@ -15,6 +15,7 @@ import { createAuthTables,createDataTable, DB_PATH } from "./database/index";
 import { createShellOutputEmitter } from "./infrastructure/shellOutput";
 import { getElectronLogger, initializeElectronLogger } from "./infrastructure/logger";
 import { createWorkerManager } from "./services/workerManager";
+import { createLocalUploadStore } from "./services/localUploadStore";
 import { createAuthSession } from "./ipc/authSession";
 import { registerIpcHandlers } from "./ipc";
 
@@ -133,6 +134,11 @@ const createWindow = () => {
     workerScriptPath,
     hasRuntimePython,
   } = resolveRuntimePaths(NODE_ENV);
+  const uploadRoot =
+    NODE_ENV === "development"
+      ? path.join(rootDir, "data", "uploads")
+      : path.join(path.dirname(DB_PATH), "uploads");
+  const localUploadStore = createLocalUploadStore(uploadRoot);
 
   logger.info("[paths] resolved", {
     envLabel,
@@ -174,6 +180,7 @@ const createWindow = () => {
     mainWindow,
     nodeEnv: NODE_ENV,
     modelDir,
+    localUploadStore,
     workerManager,
     authSession,
     workerCommand,

@@ -345,5 +345,31 @@ export const webApi: ApiType = {
       endPoints.runtimeProfile
     );
     return response.data.payload[0];
-  }
+  },
+  // Upload helpers
+  uploadInit: async (fileName: string, fileSize: number) => {
+    const res = await apiClient.post("/api/uploads/init", { fileName, fileSize });
+    return res.data;
+  },
+  uploadStatus: async (uploadId: string) => {
+    try {
+      const res = await apiClient.get(`/api/uploads/${uploadId}/status`);
+      return res.data;
+    } catch {
+      return null;
+    }
+  },
+  uploadChunk: async (uploadId: string, index: number, chunk: Blob) => {
+    const res = await fetch(`/api/uploads/${uploadId}/chunks/${index}`, {
+      method: "PUT", credentials: "include",
+      headers: { "content-type": "application/octet-stream" },
+      body: chunk,
+    });
+    if (!res.ok) throw new Error(`chunk ${index} upload failed`);
+  },
+  uploadComplete: async (uploadId: string) => {
+    await apiClient.post(`/api/uploads/${uploadId}/complete`, {});
+  },
+  heatmapSource: async (uploadId: string) =>
+    `/api/uploads/${encodeURIComponent(uploadId)}/heatmap`,
 };

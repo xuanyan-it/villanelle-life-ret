@@ -23,6 +23,8 @@ import type {
   ModelConfigPayload,
   RuntimeProfilePayload,
 } from "../types";
+export type UploadState = { uploadId: string; chunkSize: number; totalChunks: number; uploadedChunks: number[] };
+
 export type ApiType = {
   health(): Promise<{ ok: boolean }>;
   userList(params: UserQueryRequestPayload): Promise<BaseResponse<QueryResponseData>>;
@@ -73,4 +75,10 @@ export type ApiType = {
   fetchInstituteCredential(params: InstituteCredentialRequestPayload): Promise<BaseResponse<QueryResponseData>>;
   getModelConfig(): Promise<ModelConfigPayload>;
   getRuntimeProfile(): Promise<RuntimeProfilePayload>;
+  // Upload (SVS file chunked upload)
+  uploadInit(fileName: string, fileSize: number): Promise<UploadState>;
+  uploadStatus(uploadId: string): Promise<UploadState | null>;
+  uploadChunk(uploadId: string, index: number, chunk: Blob): Promise<void>;
+  uploadComplete(uploadId: string): Promise<void>;
+  heatmapSource(uploadId: string): Promise<string | null>;
 };

@@ -13,7 +13,7 @@ type WorkerReadyMessage = {
 };
 
 type PendingRequest = {
-  resolve: (value: number) => void;
+  resolve: (value: string) => void;
   reject: (reason?: Error) => void;
 };
 
@@ -169,7 +169,7 @@ export const createWorkerManager = ({
             if (!pending) return;
             workerPending.delete(id);
             if (message?.ok) {
-              pending.resolve(Number(message.result));
+              pending.resolve(String(message.result ?? ""));
             } else {
               pending.reject(new Error(message?.error ?? "worker response error"));
             }
@@ -227,7 +227,9 @@ export const createWorkerManager = ({
     });
   };
 
-  const request = async (payload: Record<string, string>) => {
+  const request = async (
+    payload: Record<string, string | boolean | number>,
+  ) => {
     await waitForWorkerReady();
     const proc = workerProcess;
     if (!proc || !proc.stdin) {
@@ -235,7 +237,7 @@ export const createWorkerManager = ({
     }
     const id = String(++workerRequestSeq);
     const message = JSON.stringify({ id, cmd: "predict", ...payload });
-    return await new Promise<number>((resolve, reject) => {
+    return await new Promise<string>((resolve, reject) => {
       workerPending.set(id, { resolve, reject });
       proc.stdin.write(message + "\n");
     });

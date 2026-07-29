@@ -99,5 +99,25 @@ export const electronApi: ApiType = {
       ApiParams<"fetchInstituteCredential">
     >("getInstituteCredential", params),
   getModelConfig: () => call<ApiReturn<"getModelConfig">>("getModelConfig"),
-  getRuntimeProfile: () => call<ApiReturn<"getRuntimeProfile">>("getRuntimeProfile")
+  getRuntimeProfile: () => call<ApiReturn<"getRuntimeProfile">>("getRuntimeProfile"),
+  uploadInit: (fileName, fileSize) =>
+    call<ApiReturn<"uploadInit">, { fileName: string; fileSize: number }>(
+      "uploadInit",
+      { fileName, fileSize },
+    ),
+  uploadStatus: (uploadId) =>
+    call<ApiReturn<"uploadStatus">, { uploadId: string }>("uploadStatus", {
+      uploadId,
+    }),
+  async uploadChunk(uploadId, index, chunk) {
+    const bytes = new Uint8Array(await chunk.arrayBuffer());
+    await call<void, { uploadId: string; index: number; bytes: Uint8Array }>(
+      "uploadChunk",
+      { uploadId, index, bytes },
+    );
+  },
+  uploadComplete: (uploadId) =>
+    call<void, { uploadId: string }>("uploadComplete", { uploadId }),
+  heatmapSource: (uploadId) =>
+    call<string | null, { uploadId: string }>("uploadHeatmap", { uploadId }),
 };

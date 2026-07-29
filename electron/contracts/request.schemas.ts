@@ -38,7 +38,7 @@ import {
   BaseUserListRequestSchema,
   BaseUserLoginRequestSchema
 } from "@villanelle/ret-shared/contracts/base";
-import { GenderSchema, SampleTypeSchema } from "@villanelle/ret-shared/domain";
+import { GenderSchema } from "@villanelle/ret-shared/domain";
 
 export const PlatformIpcChannel = {
   userLogin: "userLogin",
@@ -66,7 +66,6 @@ export const PlatformIpcChannel = {
 } as const;
 
 export const ElectronGenderSchema = z.enum(GenderSchema.options);
-export const ElectronSampleTypeSchema = z.enum(SampleTypeSchema.options);
 
 // User
 export const ElectronUserCreateRequestSchema = BaseUserCreateRequestSchema;
@@ -85,16 +84,15 @@ export const ElectronInstituteVerifyRequestSchema = BaseInstituteVerifyRequestSc
 export const ElectronFetchSampleRecordsRequestSchema = BaseRecordListRequestSchema;
 export const ElectronCreateSampleRecordsRequestSchema = BaseRecordCreateRequestSchema.extend({
   patientGender: ElectronGenderSchema,
-  sampleType: ElectronSampleTypeSchema
-});
+}).required({ modelType: true });
 
 export const ElectronUpdateSampleRecordsRequestSchema = BaseRecordUpdateRequestSchema
   .extend({
     patientGender: ElectronGenderSchema,
-    sampleType: ElectronSampleTypeSchema
   })
   .required({
-    isDeleted: true
+    isDeleted: true,
+    modelType: true,
   });
 
 export const ElectronDeleteSampleRecordsRequestSchema = BaseRecordDeleteRequestSchema;

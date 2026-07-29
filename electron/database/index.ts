@@ -62,15 +62,14 @@ export const createDataTable = async () => {
         patientName TEXT DEFAULT '',\
         patientAge TEXT DEFAULT '',\
         patientGender TEXT NOT NULL,\
-        sampleId TEXT NOT NULL,\
-        sampleType TEXT NOT NULL,\
+        uploadId TEXT DEFAULT '',\
+        slideFileName TEXT NOT NULL,\
+        slideId TEXT NOT NULL,\
         samplingDate TEXT NOT NULL,\
         receptionDate TEXT NOT NULL,\
         testDate TEXT NOT NULL,\
-        RPS4Y1 TEXT NOT NULL,\
-        PKHD1L1 TEXT NOT NULL,\
-        CRABP1 TEXT NOT NULL,\
-        GAPDH TEXT NOT NULL,\
+        modelType TEXT DEFAULT '3class',\
+        generateHeatmap INTEGER DEFAULT 0,\
         testerName TEXT NOT NULL,\
         otherInfo TEXT DEFAULT '',\
         instituteName TEXT NOT NULL,\
@@ -599,7 +598,7 @@ export const fetchSampleRecords = async (params: {
     const searchKeyword = params?.searchKeyword?.trim() ?? "";
     const hasSearchKeyword = searchKeyword.length > 0;
     const whereSQL = hasSearchKeyword
-      ? "WHERE instituteName = ? AND isDeleted = ? AND (patientName LIKE ? OR sampleId LIKE ?)"
+      ? "WHERE instituteName = ? AND isDeleted = ? AND (patientName LIKE ? OR slideId LIKE ?)"
       : "WHERE instituteName = ? AND isDeleted = ?";
     const whereValues: Array<string | number> = [instituteName, isDeletedValue];
     if (hasSearchKeyword) {
@@ -669,37 +668,35 @@ export const createSampleRecords = async (
       patientName = "",
       patientAge = "",
       patientGender,
-      sampleId,
-      sampleType,
+      uploadId = "",
+      slideFileName,
+      slideId,
       samplingDate,
       receptionDate,
       testDate,
-      RPS4Y1,
-      PKHD1L1,
-      CRABP1,
-      GAPDH,
+      modelType = "3class",
+      generateHeatmap = 0,
       testerName,
       otherInfo = "",
       instituteName,
       result = "",
       isDeleted = 0,
       reviewerName = "",
-    } = record;
+    } = record as any;
     const insertSQL = `INSERT INTO sampleRecord (\
       hospitalName,\
       doctorName,\
       patientName,\
       patientAge,\
       patientGender,\
-      sampleId,\
-      sampleType,\
+      uploadId,\
+      slideFileName,\
+      slideId,\
       samplingDate,\
       receptionDate,\
       testDate,\
-      RPS4Y1,\
-      PKHD1L1,\
-      CRABP1,\
-      GAPDH,\
+      modelType,\
+      generateHeatmap,\
       testerName,\
       otherInfo,\
       instituteName,\
@@ -707,7 +704,7 @@ export const createSampleRecords = async (
       isDeleted,\
       reviewerName\
     ) VALUES (\
-      ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?\
+      ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?\
     );`;
     db.serialize(() => {
       db.run(
@@ -718,15 +715,14 @@ export const createSampleRecords = async (
           patientName,
           patientAge,
           patientGender,
-          sampleId,
-          sampleType,
+          uploadId,
+          slideFileName,
+          slideId,
           samplingDate,
           receptionDate,
           testDate,
-          RPS4Y1,
-          PKHD1L1,
-          CRABP1,
-          GAPDH,
+          modelType,
+          generateHeatmap ? 1 : 0,
           testerName,
           otherInfo,
           instituteName,
@@ -771,22 +767,21 @@ export const updateSampleRecords = async (record: SampleRecord) => {
       patientName = "",
       patientAge = "",
       patientGender,
-      sampleId,
-      sampleType,
+      uploadId = "",
+      slideFileName,
+      slideId,
       samplingDate,
       receptionDate,
       testDate,
-      RPS4Y1,
-      PKHD1L1,
-      CRABP1,
-      GAPDH,
+      modelType = "3class",
+      generateHeatmap = 0,
       testerName,
       otherInfo = "",
       instituteName,
       result = "",
       isDeleted = 0,
       reviewerName,
-    } = record;
+    } = record as any;
     const updateSQL =
       "UPDATE sampleRecord SET \
       hospitalName = ?,\
@@ -794,15 +789,14 @@ export const updateSampleRecords = async (record: SampleRecord) => {
       patientName = ?,\
       patientAge = ?,\
       patientGender = ?,\
-      sampleId = ?,\
-      sampleType = ?,\
+      uploadId = ?,\
+      slideFileName = ?,\
+      slideId = ?,\
       samplingDate = ?,\
       receptionDate = ?,\
       testDate = ?,\
-      RPS4Y1 = ?,\
-      PKHD1L1 = ?,\
-      CRABP1 = ?,\
-      GAPDH = ?,\
+      modelType = ?,\
+      generateHeatmap = ?,\
       testerName = ?,\
       otherInfo = ?,\
       instituteName = ?,\
@@ -820,15 +814,14 @@ export const updateSampleRecords = async (record: SampleRecord) => {
           patientName,
           patientAge,
           patientGender,
-          sampleId,
-          sampleType,
+          uploadId,
+          slideFileName,
+          slideId,
           samplingDate,
           receptionDate,
           testDate,
-          RPS4Y1,
-          PKHD1L1,
-          CRABP1,
-          GAPDH,
+          modelType,
+          generateHeatmap ? 1 : 0,
           testerName,
           otherInfo,
           instituteName,

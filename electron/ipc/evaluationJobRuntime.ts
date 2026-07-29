@@ -1,5 +1,4 @@
 ﻿import { randomUUID } from "node:crypto";
-import { computeDetForWorker, mapGenderForWorker, mapSampleTypeForWorker } from "@villanelle/ret-shared/application";
 import { SharedClientErrorMessage } from "@villanelle/ret-shared/contracts";
 import type {
   ActiveEvaluationJobsResponse,
@@ -11,6 +10,7 @@ import type {
 } from "@villanelle/ret-shared/contracts/base";
 import type { BrowserWindow } from "electron";
 import type { WorkerManager } from "../services/workerManager";
+import type { LocalUploadStore } from "../services/localUploadStore";
 import type { SampleRecord, SampleRecordRequestPayload, SampleRecordResponsePayload } from "../types";
 import type { AuthSessionPrincipal } from "./authSession";
 import type {
@@ -45,6 +45,7 @@ type EvaluationJobRuntimeDeps = {
     getPrincipal(): AuthSessionPrincipal | null;
   };
   workerManager: WorkerManager;
+  localUploadStore: LocalUploadStore;
   workerCommand: string;
   workerArgs: string[];
   mainWindow: BrowserWindow;
@@ -122,23 +123,21 @@ export const createEvaluationJobRuntime = (deps: EvaluationJobRuntimeDeps) => {
   const evaluateDraft = async (
     parsedRecord: Omit<BaseRecordCreateRequest, "evaluationAsync" | "evaluationJobUuid">
   ) => {
-    const { RPS4Y1, PKHD1L1, CRABP1, GAPDH, patientGender, sampleType } = parsedRecord;
-    const DETs = computeDetForWorker(PKHD1L1, RPS4Y1, CRABP1, GAPDH);
-    const genderValue = mapGenderForWorker(patientGender);
-    await deps.workerManager.start(deps.workerCommand, deps.workerArgs);
-    const workerSampleType = mapSampleTypeForWorker(sampleType, parsedRecord.sampleId);
-    const probability = await deps.workerManager.request({
-      DET_PKHD1L1: DETs.DET_PKHD1L1,
-      DET_RPS4Y1: DETs.DET_RPS4Y1,
-      DET_CRABP1: DETs.DET_CRABP1,
-      Gender: genderValue,
-      sampleType: workerSampleType
-    });
-    const result = Number.isFinite(probability) ? `${probability}` : "";
-    deps.emitShellOutput(
-      `[evaluation] source=worker sampleType=${workerSampleType} result=${result}`
+    const principal = requirePrincipalMatchingInstitute(
+      parsedRecord.instituteName,
     );
-    return result;
+    const slidePath = await deps.localUploadStore.slidePath(
+      principal.username,
+      parsedRecord.uploadId,
+      parsedRecord.slideFileName,
+    );
+    await deps.workerManager.start(deps.workerCommand, deps.workerArgs);
+    return deps.workerManager.request({
+      slidePath,
+      modelType: parsedRecord.modelType,
+      generateHeatmap: parsedRecord.generateHeatmap,
+      uploadId: parsedRecord.uploadId,
+    });
   };
 
   const cancelAndMarkRemaining = async (jobUuid: string) => {

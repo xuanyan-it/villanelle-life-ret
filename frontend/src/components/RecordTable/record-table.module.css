@@ -47,6 +47,20 @@
 .noStrike * {
   text-decoration: none !important;
 }
+.heatmapPreview {
+  width: 100%;
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #f5f5f5;
+}
+.heatmapImage {
+  max-height: 360px;
+  object-fit: contain;
+}
 .descriptionDeleted :global(.ant-descriptions-item-label),
 .descriptionDeleted :global(.ant-descriptions-item-content),
 .descriptionDeleted :global(.ant-typography),

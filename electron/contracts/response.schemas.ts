@@ -12,7 +12,7 @@ import {
 } from "@villanelle/ret-shared/contracts/base";
 import { type QueryResponseData, createQueryResultSchema, createSuccessEnvelopeSchema } from "@villanelle/ret-shared/contracts";
 
-import { ElectronGenderSchema, ElectronSampleTypeSchema } from "./request.schemas";
+import { ElectronGenderSchema } from "./request.schemas";
 
 export const ElectronInstituteCredentialResultSchema = BaseInstituteCredentialSchema;
 
@@ -37,7 +37,6 @@ export const ElectronSampleRecordSchema = BaseRecordResponseSchema.omit({
   id: true
 }).extend({
   patientGender: ElectronGenderSchema,
-  sampleType: ElectronSampleTypeSchema
 });
 
 export const ElectronSampleRecordQuerySchema = createQueryResultSchema(ElectronSampleRecordSchema);

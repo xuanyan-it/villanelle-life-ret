@@ -104,6 +104,17 @@ export class UploadService {
     return this.readMetadata(uploadId, owner);
   }
 
+  async heatmapPath(uploadId: string, owner: string): Promise<string> {
+    await this.readMetadata(uploadId, owner);
+    const heatmapPath = path.join(this.uploadDir(uploadId), "output", "heatmap.png");
+    try {
+      await fs.access(heatmapPath);
+      return heatmapPath;
+    } catch {
+      throw new NotFoundException("heatmap not found");
+    }
+  }
+
   async writeChunk(uploadId: string, owner: string, index: number, request: Request) {
     const metadata = await this.readMetadata(uploadId, owner);
     if (metadata.status !== "uploading") throw new BadRequestException("upload is not active");

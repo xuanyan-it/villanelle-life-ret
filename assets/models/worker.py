@@ -12,6 +12,7 @@ Offline / USB deployment:
 """
 
 import glob
+import contextlib
 import json
 import os
 import shutil
@@ -22,6 +23,7 @@ import traceback
 from pathlib import Path
 
 import h5py
+import numpy as np
 import torch
 
 # ==================== Bootstrap ====================
@@ -224,23 +226,70 @@ def _log_progress(step: str, data: dict) -> None:
     print(json.dumps(record, ensure_ascii=False, default=str), file=sys.stderr, flush=True)
 
 
-def _infer_from_path(h5_path: str, slide_id: str) -> float:
+def _infer_from_path(
+    h5_path: str,
+    slide_id: str,
+) -> tuple[int, str, float, np.ndarray, np.ndarray]:
     """Run CLAM inference from an .h5 feature file.
 
-    Returns probability (0–1) for the predicted class.
+    Returns class metadata plus attention scores and patch coordinates.
     """
     with h5py.File(h5_path, "r") as f:
         feats = torch.tensor(f["features"][:]).to(DEVICE)
+        coords = f["coords"][:]
 
     model = load_model()
     with torch.no_grad():
-        _, Y_prob, Y_hat, _, _ = model(feats)
+        _, Y_prob, Y_hat, attention_raw, _ = model(feats)
         pred_class = int(Y_hat.item())
         prob = float(Y_prob[0, pred_class])
         label = CLASS_MAP.get(pred_class, "?")
+        attention = attention_raw[pred_class].reshape(-1, 1).cpu().numpy()
 
     print(f"[infer] slide={slide_id} class={pred_class}({label}) prob={prob:.4f}", file=sys.stderr)
-    return prob
+    return pred_class, label, prob, attention, coords
+
+
+def _generate_heatmap(
+    slide_path: str,
+    attention: np.ndarray,
+    coords: np.ndarray,
+) -> Path:
+    """Render the CLAM attention overlay into the upload's persistent output directory."""
+    from vis_utils.heatmap_utils import drawHeatmap
+
+    output_dir = Path(slide_path).resolve().parent.parent / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    heatmap_path = output_dir / "heatmap.png"
+    temporary_path = output_dir / "heatmap.tmp"
+
+    # CLAM's helper prints diagnostic text to stdout. Redirect it so the
+    # worker's JSON-lines protocol remains clean.
+    with contextlib.redirect_stdout(sys.stderr):
+        heatmap = drawHeatmap(
+            attention,
+            coords,
+            slide_path=slide_path,
+            vis_level=-1,
+            cmap="jet",
+            alpha=0.5,
+            segment=False,
+            use_holes=False,
+            binarize=False,
+            blank_canvas=False,
+            thresh=-1,
+            patch_size=(PATCH_SIZE, PATCH_SIZE),
+            convert_to_percentiles=True,
+        )
+    try:
+        heatmap.save(temporary_path, format="PNG")
+        os.replace(temporary_path, heatmap_path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+        heatmap.close()
+
+    print(f"[heatmap] saved: {heatmap_path}", file=sys.stderr, flush=True)
+    return heatmap_path
 
 
 # ==================== JSON-Lines Protocol ====================
@@ -316,14 +365,25 @@ def handle_predict(msg: dict) -> None:
         if h5_path is None:
             raise RuntimeError(f"feature .h5 not found for slide {slide_id} in {feat_dir}")
 
-        prob = _infer_from_path(h5_path, slide_id)
-        _log_progress("STEP_3_infer_done", {"slide_id": slide_id, "prob": prob})
+        pred_class, label, prob, attention, coords = _infer_from_path(h5_path, slide_id)
+        result = f"class={pred_class}({label}) prob={prob:.4f}"
+        _log_progress("STEP_3_infer_done", {
+            "slide_id": slide_id,
+            "class": pred_class,
+            "label": label,
+            "prob": prob,
+            "result": result,
+        })
 
         if generate_heatmap:
-            # TODO: implement heatmap generation via create_heatmaps.py
-            print(f"[heatmap] requested for {slide_id} — not yet implemented", file=sys.stderr)
+            write_progress(85, "heatmap", msg_id)
+            heatmap_path = _generate_heatmap(slide_path, attention, coords)
+            _log_progress("STEP_4_heatmap_done", {
+                "slide_id": slide_id,
+                "heatmap_path": heatmap_path,
+            })
 
-        write_line({"id": msg_id, "ok": True, "result": f"{prob:.4f}"})
+        write_line({"id": msg_id, "ok": True, "result": result})
 
     except Exception:
         write_line({"id": msg_id, "ok": False, "error": traceback.format_exc()})

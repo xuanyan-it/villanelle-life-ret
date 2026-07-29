@@ -75,8 +75,10 @@ describe("createWorkerManager", () => {
     expect(sentPayload).toContain('"id":"1"');
     expect(sentPayload).toContain('"cmd":"predict"');
 
-    lineHandler?.(JSON.stringify({ id: "1", ok: true, result: 0.73 }));
-    await expect(requestPromise).resolves.toBe(0.73);
+    lineHandler?.(
+      JSON.stringify({ id: "1", ok: true, result: "class=0(N) prob=0.7300" }),
+    );
+    await expect(requestPromise).resolves.toBe("class=0(N) prob=0.7300");
   });
 
   test("rejects waiting requests when worker ready fails", async () => {
