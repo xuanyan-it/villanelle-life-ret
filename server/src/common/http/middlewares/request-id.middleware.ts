@@ -15,7 +15,7 @@ export class RequestIdMiddleware implements NestMiddleware {
     const requestId = typeof incoming === "string" && incoming.trim() ? incoming : randomUUID();
     req.requestId = requestId;
     res.setHeader("x-request-id", requestId);
-    requestLogger.log(`${req.method} ${req.originalUrl} requestId=${requestId}`);
+    requestLogger.debug?.(`${req.method} ${req.originalUrl} requestId=${requestId}`);
     emitHttpAuditEvent({
       eventName: "http.request",
       eventType: "Management",

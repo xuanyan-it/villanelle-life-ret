@@ -52,5 +52,5 @@ export const emitHttpAuditEvent = (event: Omit<AuditEvent, "eventID" | "eventTim
     eventTime: new Date().toISOString(),
     ...event
   });
-  auditLogger.log(JSON.stringify(sanitizeLogValue(payload)));
+  auditLogger.debug?.(JSON.stringify(sanitizeLogValue(payload)));
 };

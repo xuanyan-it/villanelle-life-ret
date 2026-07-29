@@ -20,8 +20,14 @@ extraResources:
     to: assets/templates
     filter:
       - "**/*"
-  - from: ../assets/models/model.config.json
-    to: assets/models/model.config.json
+  - from: ../assets/models
+    to: assets/models
+    filter:
+      - "**/*"
+  - from: ../assets/openslide
+    to: assets/openslide
+    filter:
+      - "**/*"
 win:
   icon: assets/app.ico
 publish: null

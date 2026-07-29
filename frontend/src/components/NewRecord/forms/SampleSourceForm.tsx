@@ -54,7 +54,7 @@ const SampleSourceForm: React.FC<Props> = ({ form, formItemLayout, items, onRese
         <p className="ant-upload-hint">{t("newRecord_slideFile_hint")}</p>
       </Upload.Dragger>
     </Form.Item>
-    <Form.Item name={items.patientGender.name} label={items.patientGender.label} labelAlign="left">
+    <Form.Item name={items.patientGender.name} label={items.patientGender.label} labelAlign="left" rules={[{ required: true, message: t("newRecord_sampleSource_patientGender_warning") }]}>
       <Radio.Group optionType="button" buttonStyle="solid" block>
         <Radio value={Gender.Male}>{t("newRecord_sampleSource_patientGender_male")}</Radio>
         <Radio value={Gender.Female}>{t("newRecord_sampleSource_patientGender_female")}</Radio>
@@ -65,29 +65,33 @@ const SampleSourceForm: React.FC<Props> = ({ form, formItemLayout, items, onRese
       label={items.samplingDate.label}
       labelAlign="left"
       dependencies={[items.receptionDate.name]}
-      rules={[({ getFieldValue }) => ({
+      rules={[
+        { required: true, message: t("newRecord_sampleSource_samplingDate_warning_empty") },
+        ({ getFieldValue }) => ({
         validator(_, value) {
-          if (!value) return Promise.resolve();
+          if (!value) return Promise.reject(new Error(t("newRecord_sampleSource_samplingDate_warning_empty")));
           if (dayjs(value).isAfter(getFieldValue(items.receptionDate.name))) return Promise.reject(new Error(t("newRecord_sampleSource_samplingDate_warning_laterThanReceptionDate")));
           if (dayjs(value).isAfter()) return Promise.reject(new Error(t("newRecord_sampleSource_samplingDate_warning_laterThanToday")));
           return Promise.resolve();
         },
       })]}
-    ><DatePicker allowClear format="YYYY/MM/DD" style={{ width: "100%" }} /></Form.Item>
+    ><DatePicker allowClear={false} format="YYYY/MM/DD" style={{ width: "100%" }} /></Form.Item>
     <Form.Item
       name={items.receptionDate.name}
       label={items.receptionDate.label}
       labelAlign="left"
       dependencies={[items.samplingDate.name]}
-      rules={[({ getFieldValue }) => ({
+      rules={[
+        { required: true, message: t("newRecord_sampleSource_receptionDate_warning_empty") },
+        ({ getFieldValue }) => ({
         validator(_, value) {
-          if (!value) return Promise.resolve();
+          if (!value) return Promise.reject(new Error(t("newRecord_sampleSource_receptionDate_warning_empty")));
           if (dayjs(value).isBefore(getFieldValue(items.samplingDate.name))) return Promise.reject(new Error(t("newRecord_sampleSource_receptionDate_warning_earlierThanSamplingDate")));
           if (dayjs(value).isAfter()) return Promise.reject(new Error(t("newRecord_sampleSource_receptionDate_warning_laterThanToday")));
           return Promise.resolve();
         },
       })]}
-    ><DatePicker allowClear format="YYYY/MM/DD" style={{ width: "100%" }} /></Form.Item>
+    ><DatePicker allowClear={false} format="YYYY/MM/DD" style={{ width: "100%" }} /></Form.Item>
     <Form.Item name={items.doctorName.name} label={items.doctorName.label} labelAlign="left">
       <Input allowClear placeholder={t("newRecord_placeholder_optional")} maxLength={30} />
     </Form.Item>

@@ -243,12 +243,20 @@ const NewRecord: React.FC = () => {
           while (attempt < maxAttempts) {
             attempt++;
             const status = await api.evaluationJobStatus({ jobUuid, instituteName });
-            if (
-              status.status === "succeeded" ||
-              status.status === "failed" ||
-              status.status === "cancelled"
-            ) {
+            if (status.status === "succeeded") {
               clearSingleQueue();
+              dispatch(fetchSampleRecordAsync({ page: currentPage, deletedOnly }));
+              return;
+            }
+            if (status.status === "failed" || status.status === "cancelled") {
+              clearSingleQueue();
+              dispatch(
+                pushNotification({
+                  type: "error",
+                  message: "notification_recordCreate_error_message",
+                  description: status.errorMessage || "notification_recordCreate_error_description"
+                })
+              );
               dispatch(fetchSampleRecordAsync({ page: currentPage, deletedOnly }));
               return;
             }
@@ -389,14 +397,24 @@ const NewRecord: React.FC = () => {
           while (!stopped && attempt < maxAttempts) {
             attempt++;
             const status = await api.evaluationJobStatus({ jobUuid, instituteName });
-            if (
-              status.status === "succeeded" ||
-              status.status === "failed" ||
-              status.status === "cancelled"
-            ) {
+            if (status.status === "succeeded") {
               dispatch(updateTestQueue([]));
               dispatch(setTestQueueLength(0));
               sessionStorage.removeItem(sessionKey);
+              dispatch(fetchSampleRecordAsync({ page: currentPage, deletedOnly }));
+              return;
+            }
+            if (status.status === "failed" || status.status === "cancelled") {
+              dispatch(updateTestQueue([]));
+              dispatch(setTestQueueLength(0));
+              sessionStorage.removeItem(sessionKey);
+              dispatch(
+                pushNotification({
+                  type: "error",
+                  message: "notification_recordCreate_error_message",
+                  description: status.errorMessage || "notification_recordCreate_error_description"
+                })
+              );
               dispatch(fetchSampleRecordAsync({ page: currentPage, deletedOnly }));
               return;
             }
@@ -454,13 +472,22 @@ const NewRecord: React.FC = () => {
           dispatch(setTestQueueLength(status.items.length));
           dispatch(updateTestQueue(new Array(pending).fill({} as any)));
 
-          if (
-            status.status === "succeeded" ||
-            status.status === "failed" ||
-            status.status === "cancelled"
-          ) {
+          if (status.status === "succeeded") {
             dispatch(updateTestQueue([]));
             dispatch(setTestQueueLength(0));
+            dispatch(fetchSampleRecordAsync({ page: currentPage, deletedOnly }));
+            return;
+          }
+          if (status.status === "failed" || status.status === "cancelled") {
+            dispatch(updateTestQueue([]));
+            dispatch(setTestQueueLength(0));
+            dispatch(
+              pushNotification({
+                type: "error",
+                message: "notification_importMany_enqueue_failed_message",
+                description: status.errorMessage || "notification_importMany_enqueue_failed_description",
+              })
+            );
             dispatch(fetchSampleRecordAsync({ page: currentPage, deletedOnly }));
             return;
           }
@@ -545,13 +572,22 @@ const NewRecord: React.FC = () => {
               dispatch(fetchSampleRecordAsync({ page: currentPage, deletedOnly }));
             }
 
-            if (
-              status.status === "succeeded" ||
-              status.status === "failed" ||
-              status.status === "cancelled"
-            ) {
+            if (status.status === "succeeded") {
               dispatch(updateTestQueue([]));
               dispatch(setTestQueueLength(0));
+              dispatch(fetchSampleRecordAsync({ page: currentPage, deletedOnly }));
+              return;
+            }
+            if (status.status === "failed" || status.status === "cancelled") {
+              dispatch(updateTestQueue([]));
+              dispatch(setTestQueueLength(0));
+              dispatch(
+                pushNotification({
+                  type: "error",
+                  message: "notification_importMany_enqueue_failed_message",
+                  description: status.errorMessage || "notification_importMany_enqueue_failed_description",
+                })
+              );
               dispatch(fetchSampleRecordAsync({ page: currentPage, deletedOnly }));
               return;
             }

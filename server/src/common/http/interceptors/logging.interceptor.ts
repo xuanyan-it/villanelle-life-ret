@@ -49,7 +49,7 @@ export class LoggingInterceptor implements NestInterceptor {
           if (!response.headersSent) {
             response.setHeader("x-response-time", `${elapsed}ms`);
           }
-          interceptorLogger.log(
+          interceptorLogger.debug?.(
             `${request.method ?? "UNKNOWN"} ${request.originalUrl ?? ""} status=${response.statusCode ?? 0} ${elapsed}ms requestId=${request.requestId ?? "-"}`
           );
           emitHttpAuditEvent({

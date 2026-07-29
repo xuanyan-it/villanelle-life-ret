@@ -37,6 +37,7 @@ type WorkerPredictPayload = {
   modelType: "2class" | "3class" | "5class";
   generateHeatmap: boolean;
   uploadId: string;
+  slidePath: string;
 };
 
 type PendingRequest = {
@@ -56,8 +57,11 @@ class PythonWorkerClient {
   private workerReady = false;
   private workerReadyMessage: WorkerReadyMessage | null = null;
   private readonly workerReadyWaiters = new Set<ReadyWaiter>();
-  private readonly workerPending = new Map<string, PendingRequest>();
+  private readonly workerPending = new Map<string, PendingRequest>();  private onProgress: ((pct: number, step: string) => void) | null = null;
 
+  setOnProgress(cb: (pct: number, step: string) => void): void {
+    this.onProgress = cb;
+  }
   private flushReadyWaiters(error?: Error): void {
     this.workerReadyWaiters.forEach((waiter) => {
       if (error) {
@@ -171,6 +175,13 @@ class PythonWorkerClient {
               return;
             }
 
+            if (message?.type === "progress") {
+              if (typeof message?.pct === "number" && typeof message?.step === "string") {
+                this.onProgress?.(message.pct, message.step);
+              }
+              return;
+            }
+
             const id = String(message?.id ?? "");
             const pending = this.workerPending.get(id);
             if (!pending) return;
@@ -268,6 +279,15 @@ export class PythonRecordEvaluator implements RecordEvaluator, OnModuleDestroy {
       this.logger.warn(`[evaluation] model config unavailable: ${String(error)}`);
     }
 
+    // Resolve the SVS slide file path from upload storage
+    const uploadRoot = path.resolve(
+      this.configService.get<string>("UPLOAD_ROOT") ?? path.join(process.cwd(), "data", "uploads")
+    );
+    const slidePath = path.join(uploadRoot, record.uploadId, "input", record.slideFileName);
+    if (!fs.existsSync(slidePath)) {
+      throw new Error(`slide file not found: ${slidePath}`);
+    }
+
     const scriptPath =
       this.configService.get<string>("SERVICE_EVAL_SCRIPT") ?? path.resolve(modelRoot, "worker.py");
     const pythonCmd =
@@ -279,10 +299,14 @@ export class PythonRecordEvaluator implements RecordEvaluator, OnModuleDestroy {
 
     try {
       await this.workerClient.start(pythonCmd, args);
+      this.workerClient.setOnProgress((pct, step) => {
+        this.logger.log(`[evaluation] progress ${pct}% — ${step}`);
+      });
       const probability = await this.workerClient.request({
         modelType: record.modelType,
         generateHeatmap: record.generateHeatmap,
-        uploadId: record.uploadId
+        uploadId: record.uploadId,
+        slidePath
       });
 
       const result = Number.isFinite(probability) ? `${probability}` : "";

@@ -28,7 +28,7 @@ from models.model_clam import CLAM_MB
 # 所有路径可设绝对路径，留空则用项目 data/ 目录
 _DATA_ROOT = Path(os.environ.get("CLAM_DATA_DIR", str(_PROJ.parent.parent / "data")))
 SLIDE_DIR = os.environ.get("CLAM_SLIDE_DIR", str(_DATA_ROOT / "slides"))
-MODEL_PATH = os.environ.get("CLAM_MODEL_CKPT", str(_PROJ / "checkpoint.pt"))
+MODEL_PATH = os.environ.get("CLAM_MODEL_CKPT", str(_PROJ / "2class.pt"))
 OUTPUT_ROOT = os.environ.get("CLAM_OUTPUT_DIR", str(_DATA_ROOT / "output"))
 PRESET = os.environ.get("CLAM_PRESET", str(_CLAM_DIR / "presets" / "bwh_biopsy.csv"))
 TEMPLATE_CONFIG = os.environ.get("CLAM_HEATMAP_TEMPLATE", str(_CLAM_DIR / "heatmaps" / "configs" / "heatmap_config_template.yaml"))
