@@ -45,7 +45,6 @@ if _OPENSLIDE_DIR.is_dir():
 from models.model_clam import CLAM_MB  # noqa: E402
 
 # ==================== Configuration ====================
-MODEL_PATH = os.environ.get("CLAM_MODEL_CKPT", str(_PROJ / "2class.pt"))
 PRESET = os.environ.get("CLAM_PRESET", str(_CLAM_DIR / "presets" / "bwh_biopsy.csv"))
 RESNET_WEIGHTS_PATH = Path(
     os.environ.get(
@@ -59,27 +58,82 @@ PATCH_SIZE = 256
 STEP_SIZE = 256
 BATCH_SIZE = 256
 FEAT_SUBDIR = "tumor_subtyping_resnet_features"
-CLASS_MAP = {0: "N", 1: "P"}
+
+MODEL_CONFIGS = {
+    "2class": {
+        "path": Path(os.environ.get("CLAM_2CLASS_CKPT", str(_PROJ / "2class.pt"))),
+        "n_classes": 2,
+        "labels": {0: "N", 1: "P"},
+    },
+    "3class": {
+        "path": Path(os.environ.get("CLAM_3CLASS_CKPT", str(_PROJ / "3class.pt"))),
+        "n_classes": 3,
+        "labels": {0: "N", 1: "R", 2: "B"},
+    },
+    "5class": {
+        "path": Path(os.environ.get("CLAM_5CLASS_CKPT", str(_PROJ / "5class.pt"))),
+        "n_classes": 5,
+        # The repository does not define medical names for these five outputs.
+        # Keep their original class indexes instead of inventing a mapping.
+        "labels": {index: str(index) for index in range(5)},
+    },
+}
 
 PYTHON_EXE = sys.executable
 PATCH_SCRIPT = str(_PROJ / "create_patches_fp.py")
 EXTRACT_SCRIPT = str(_PROJ / "extract_features_fp.py")
 
 # ==================== Model ====================
-MODEL = None
+MODELS = {}
 
 
-def load_model():
-    """Load CLAM_MB from checkpoint (lazy, cached)."""
-    global MODEL
-    if MODEL is not None:
-        return MODEL
-    state_dict = torch.load(MODEL_PATH, map_location=DEVICE)
-    MODEL = CLAM_MB(n_classes=2, dropout=0.25, size_arg="small")
-    MODEL.load_state_dict(state_dict, strict=False)
-    MODEL.to(DEVICE)
-    MODEL.eval()
-    return MODEL
+def _get_model_config(model_type: object) -> dict:
+    """Return the requested model configuration or reject unsupported input."""
+    normalized = str(model_type or "").strip().lower()
+    config = MODEL_CONFIGS.get(normalized)
+    if config is None:
+        supported = ", ".join(MODEL_CONFIGS)
+        raise ValueError(
+            f"unsupported modelType {model_type!r}; expected one of: {supported}"
+        )
+    model_path = config["path"]
+    if not model_path.is_file():
+        raise FileNotFoundError(
+            f"{normalized} checkpoint not found: {model_path}"
+        )
+    return {"model_type": normalized, **config}
+
+
+def load_model(model_type: object):
+    """Load the requested CLAM_MB checkpoint (lazy, cached per model type)."""
+    config = _get_model_config(model_type)
+    normalized = config["model_type"]
+    if normalized in MODELS:
+        return MODELS[normalized]
+
+    state_dict = torch.load(config["path"], map_location=DEVICE)
+    model = CLAM_MB(
+        n_classes=config["n_classes"],
+        dropout=0.25,
+        size_arg="small",
+    )
+    incompatible = model.load_state_dict(state_dict, strict=False)
+    unexpected = set(incompatible.unexpected_keys) - {"instance_loss_fn.labels"}
+    if incompatible.missing_keys or unexpected:
+        raise RuntimeError(
+            f"{normalized} checkpoint does not match the model architecture; "
+            f"missing={incompatible.missing_keys}, unexpected={sorted(unexpected)}"
+        )
+    model.to(DEVICE)
+    model.eval()
+    MODELS[normalized] = model
+    print(
+        f"[model] loaded type={normalized} classes={config['n_classes']} "
+        f"path={config['path']}",
+        file=sys.stderr,
+        flush=True,
+    )
+    return model
 
 
 # ==================== Pipeline Steps ====================
@@ -229,6 +283,7 @@ def _log_progress(step: str, data: dict) -> None:
 def _infer_from_path(
     h5_path: str,
     slide_id: str,
+    model_type: str,
 ) -> tuple[int, str, float, np.ndarray, np.ndarray]:
     """Run CLAM inference from an .h5 feature file.
 
@@ -238,15 +293,20 @@ def _infer_from_path(
         feats = torch.tensor(f["features"][:]).to(DEVICE)
         coords = f["coords"][:]
 
-    model = load_model()
+    config = _get_model_config(model_type)
+    model = load_model(model_type)
     with torch.no_grad():
         _, Y_prob, Y_hat, attention_raw, _ = model(feats)
         pred_class = int(Y_hat.item())
         prob = float(Y_prob[0, pred_class])
-        label = CLASS_MAP.get(pred_class, "?")
+        label = config["labels"].get(pred_class, str(pred_class))
         attention = attention_raw[pred_class].reshape(-1, 1).cpu().numpy()
 
-    print(f"[infer] slide={slide_id} class={pred_class}({label}) prob={prob:.4f}", file=sys.stderr)
+    print(
+        f"[infer] slide={slide_id} model={model_type} "
+        f"class={pred_class}({label}) prob={prob:.4f}",
+        file=sys.stderr,
+    )
     return pred_class, label, prob, attention, coords
 
 
@@ -258,9 +318,9 @@ def _generate_heatmap(
     """Render the CLAM attention overlay into the upload's persistent output directory."""
     from vis_utils.heatmap_utils import drawHeatmap
 
-    output_dir = Path(slide_path).resolve().parent.parent / "output"
+    heatmap_path = _persistent_heatmap_path(slide_path)
+    output_dir = heatmap_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
-    heatmap_path = output_dir / "heatmap.png"
     temporary_path = output_dir / "heatmap.tmp"
 
     # CLAM's helper prints diagnostic text to stdout. Redirect it so the
@@ -304,17 +364,40 @@ def write_line(obj: dict) -> None:
     sys.stdout.flush()
 
 
+def _parse_bool(value: object) -> bool:
+    """Parse JSON/IPC boolean values without treating the string 'false' as true."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value == 1
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return False
+
+
+def _persistent_heatmap_path(slide_path: str) -> Path:
+    return Path(slide_path).resolve().parent.parent / "output" / "heatmap.png"
+
+
 def handle_predict(msg: dict) -> None:
     """Run full CLAM pipeline for a single slide."""
     msg_id = str(msg.get("id", ""))
     slide_path = msg.get("slidePath", "")
-    generate_heatmap = bool(msg.get("generateHeatmap", False))
+    generate_heatmap_raw = msg.get("generateHeatmap", False)
+    generate_heatmap = _parse_bool(generate_heatmap_raw)
     upload_id = str(msg.get("uploadId", ""))
 
     if not slide_path or not os.path.isfile(slide_path):
         write_line({"id": msg_id, "ok": False, "error": f"slide file not found: {slide_path}"})
         return
 
+    try:
+        model_config = _get_model_config(msg.get("modelType"))
+    except (ValueError, FileNotFoundError) as error:
+        write_line({"id": msg_id, "ok": False, "error": str(error)})
+        return
+
+    model_type = model_config["model_type"]
     slide_id = Path(slide_path).stem
     slide_dir = os.path.dirname(slide_path)
 
@@ -325,9 +408,15 @@ def handle_predict(msg: dict) -> None:
         "slide_dir": slide_dir,
         "slide_exists": os.path.isfile(slide_path),
         "slide_size": os.path.getsize(slide_path) if os.path.isfile(slide_path) else 0,
-        "modelType": msg.get("modelType", ""),
+        "modelType": model_type,
+        "modelPath": model_config["path"],
+        "nClasses": model_config["n_classes"],
+        "generateHeatmapRaw": repr(generate_heatmap_raw),
         "generateHeatmap": generate_heatmap,
     })
+
+    if not generate_heatmap:
+        _persistent_heatmap_path(slide_path).unlink(missing_ok=True)
 
     # Temp work directory per evaluation
     work_root = os.path.join(tempfile.gettempdir(), "ret-eval", upload_id)
@@ -365,10 +454,15 @@ def handle_predict(msg: dict) -> None:
         if h5_path is None:
             raise RuntimeError(f"feature .h5 not found for slide {slide_id} in {feat_dir}")
 
-        pred_class, label, prob, attention, coords = _infer_from_path(h5_path, slide_id)
+        pred_class, label, prob, attention, coords = _infer_from_path(
+            h5_path,
+            slide_id,
+            model_type,
+        )
         result = f"class={pred_class}({label}) prob={prob:.4f}"
         _log_progress("STEP_3_infer_done", {
             "slide_id": slide_id,
+            "modelType": model_type,
             "class": pred_class,
             "label": label,
             "prob": prob,

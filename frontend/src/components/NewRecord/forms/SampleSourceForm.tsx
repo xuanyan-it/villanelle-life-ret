@@ -112,7 +112,12 @@ const SampleSourceForm: React.FC<Props> = ({ form, formItemLayout, items, onRese
         <Radio.Button value="5class">{t("newRecord_modelType_5class")}</Radio.Button>
       </Radio.Group>
     </Form.Item>
-    <Form.Item name={items.generateHeatmap.name} label={items.generateHeatmap.label} labelAlign="left" valuePropName="checked">
+    <Form.Item
+      name={items.generateHeatmap.name}
+      label={items.generateHeatmap.label}
+      labelAlign="left"
+      initialValue={false}
+    >
       <Radio.Group optionType="button" buttonStyle="solid">
         <Radio.Button value={false}>{t("newRecord_generateHeatmap_no")}</Radio.Button>
         <Radio.Button value={true}>{t("newRecord_generateHeatmap_yes")}</Radio.Button>
