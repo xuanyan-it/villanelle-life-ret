@@ -15,6 +15,7 @@
   "notification_export_success_message": "导出完成",
   "notification_export_error_message": "导出失败",
   "notification_recordCreate_success_message": "样本创建成功",
+  "notification_recordCreate_time_elapsed": "总耗时 {{seconds}} 秒",
   "notification_recordCreate_error_message": "样本创建失败",
   "notification_recordCreate_error_description": "",
   "notification_recordDelete_success_message": "样本删除成功",

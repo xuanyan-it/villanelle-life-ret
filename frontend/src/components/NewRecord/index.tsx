@@ -151,6 +151,7 @@ const NewRecord: React.FC = () => {
     const data = pendingFormData;
     const uploadFile = (data as any)?.slideFile?.[0]?.originFileObj as File | undefined;
     if (!data || !uploadFile) return;
+    const uploadStartTime = Date.now();
     const current = dayjs().toISOString();
     const resumeKey = `ret-svs-upload:${uploadFile.name}:${uploadFile.size}:${uploadFile.lastModified}`;
     let upload: UploadState | null = null;
@@ -206,7 +207,7 @@ const NewRecord: React.FC = () => {
       const jobUuid = created.uuid;
       sessionStorage.setItem(
         sessionKey,
-        JSON.stringify({ jobUuid, instituteName }),
+        JSON.stringify({ jobUuid, instituteName, uploadStartTime }),
       );
 
       // 让底部进度条回归：Footer 的进度依赖 Redux 的 testQueue。
@@ -225,16 +226,25 @@ const NewRecord: React.FC = () => {
             const status = await api.evaluationJobStatus({ jobUuid, instituteName });
             if (status.status === "succeeded") {
               clearSingleQueue();
+              const elapsedS = ((Date.now() - uploadStartTime) / 1000).toFixed(1);
+              dispatch(
+                pushNotification({
+                  type: "success",
+                  message: "notification_recordCreate_success_message",
+                  description: t("notification_recordCreate_time_elapsed", { seconds: elapsedS }),
+                })
+              );
               dispatch(fetchSampleRecordAsync({ page: currentPage, deletedOnly }));
               return;
             }
             if (status.status === "failed" || status.status === "cancelled") {
               clearSingleQueue();
+              const elapsedS = ((Date.now() - uploadStartTime) / 1000).toFixed(1);
               dispatch(
                 pushNotification({
                   type: "error",
                   message: "notification_recordCreate_error_message",
-                  description: status.errorMessage || "notification_recordCreate_error_description"
+                  description: `${status.errorMessage || t("notification_recordCreate_error_description")} (${elapsedS}s)`
                 })
               );
               dispatch(fetchSampleRecordAsync({ page: currentPage, deletedOnly }));
@@ -507,6 +517,7 @@ const NewRecord: React.FC = () => {
     if (!importRecords.length) {
       return;
     }
+    const batchStartTime = Date.now();
     // add testDate last minute
     const current = dayjs().toISOString();
     const requestPayloadArr = importRecords.map((item) => ({
@@ -555,17 +566,26 @@ const NewRecord: React.FC = () => {
             if (status.status === "succeeded") {
               dispatch(updateTestQueue([]));
               dispatch(setTestQueueLength(0));
+              const elapsedS = ((Date.now() - batchStartTime) / 1000).toFixed(1);
+              dispatch(
+                pushNotification({
+                  type: "success",
+                  message: "notification_importFile_success_message",
+                  description: t("notification_recordCreate_time_elapsed", { seconds: elapsedS }),
+                })
+              );
               dispatch(fetchSampleRecordAsync({ page: currentPage, deletedOnly }));
               return;
             }
             if (status.status === "failed" || status.status === "cancelled") {
               dispatch(updateTestQueue([]));
               dispatch(setTestQueueLength(0));
+              const elapsedS = ((Date.now() - batchStartTime) / 1000).toFixed(1);
               dispatch(
                 pushNotification({
                   type: "error",
-                  message: "notification_importMany_enqueue_failed_message",
-                  description: status.errorMessage || "notification_importMany_enqueue_failed_description",
+                  message: "notification_importFile_error_message",
+                  description: `${status.errorMessage || t("notification_importFile_error_description")} (${elapsedS}s)`,
                 })
               );
               dispatch(fetchSampleRecordAsync({ page: currentPage, deletedOnly }));
@@ -580,8 +600,8 @@ const NewRecord: React.FC = () => {
           dispatch(
             pushNotification({
               type: "error",
-              message: "notification_importMany_enqueue_failed_message",
-              description: "notification_importMany_enqueue_failed_description",
+              message: "notification_importFile_error_message",
+              description: t("notification_importFile_error_description"),
             })
           );
         }
@@ -592,8 +612,8 @@ const NewRecord: React.FC = () => {
       dispatch(
         pushNotification({
           type: "error",
-          message: "notification_importMany_enqueue_failed_message",
-          description: "notification_importMany_enqueue_failed_description",
+          message: "notification_importFile_error_message",
+          description: t("notification_importFile_error_description"),
         })
       );
     }

@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "@react-pdf/renderer";
 import React from "react";
-import { getResultPositiveThreshold } from "../../../../runtime/modelConfig";
+import { getResultKind } from "../../../RecordTable/recordTable.logic";
 import Indentation from "../../components/Indentation";
 import PageFooter from "../../components/PageFooter";
 import PageHeader from "../../components/PageHeader";
@@ -158,6 +158,23 @@ const Diagnosis = (props) => {
 export default Diagnosis;
 const DiagnosisBlock = (props) => {
   const { record, content } = props;
+  const resultKind = getResultKind(record.result);
+  const resultText =
+    resultKind === "negative"
+      ? content.testResult_negative
+      : resultKind === "positive"
+        ? content.testResult_positive
+        : resultKind === "borderline"
+          ? content.testResult_borderline
+          : content.testResult_unavailable;
+  const resultColor =
+    resultKind === "negative"
+      ? "green"
+      : resultKind === "positive"
+        ? "red"
+        : resultKind === "borderline"
+          ? "#d48806"
+          : "#666";
   return (
     <View style={styles.diagnosisBlock}>
       
@@ -231,13 +248,8 @@ const DiagnosisBlock = (props) => {
               <Text>{content.testResult_testResult}</Text>
             </View>
             <View style={styles.tableCell.merged}>
-              <Text>
-                评估结果：
-                {parseFloat(record.result) <= getResultPositiveThreshold() ? (
-                  <Text style={{ fontWeight: 600, color: "green" }}>无转移</Text>
-                ) : (
-                  <Text style={{ fontWeight: 600, color: "red" }}>有转移</Text>
-                )}
+              <Text style={{ fontWeight: 600, color: resultColor }}>
+                {resultText}
               </Text>
             </View>
           </View>

@@ -17,56 +17,71 @@ export const filterVisibleRecords = (
     showDeletedOnly ? Boolean(record.isDeleted) : !record.isDeleted
   );
 
-/** CLAM multi-class label keys */
-const CLAM_LABEL_MAP: Record<string, string> = {
-  N: "recordTable_geneInfo_evaluationResult_normal",
-  R: "recordTable_geneInfo_evaluationResult_retfusion",
-  B: "recordTable_geneInfo_evaluationResult_borderline",
+export type EvaluationResultKind = "negative" | "positive" | "borderline";
+
+const CLAM_LABEL_KIND: Record<string, EvaluationResultKind> = {
+  N: "negative",
+  P: "positive",
+  R: "positive",
+  B: "borderline",
 };
 
-const CLAM_TAG_COLOR: Record<string, string> = {
-  N: "success",
-  R: "volcano",
-  B: "warning",
+const RESULT_LABEL_KEY: Record<EvaluationResultKind, string> = {
+  negative: "recordTable_geneInfo_evaluationResult_non_metastasis",
+  positive: "recordTable_geneInfo_evaluationResult_metastasis",
+  borderline: "recordTable_geneInfo_evaluationResult_borderline",
+};
+
+const parseWorkerClass = (result: string): number | null => {
+  const match = result.trim().match(/^class\s*=\s*(\d+)/i);
+  return match ? Number(match[1]) : null;
+};
+
+/** Converts persisted worker output into a presentation-level result. */
+export const getResultKind = (
+  result: string,
+): EvaluationResultKind | null => {
+  if (!result) return null;
+  const workerClass = parseWorkerClass(result);
+  if (workerClass === 0) return "negative";
+  if (workerClass === 1) return "positive";
+  if (workerClass === 2) return "borderline";
+
+  const clamLabel = result.trim().toUpperCase();
+  if (CLAM_LABEL_KIND[clamLabel]) return CLAM_LABEL_KIND[clamLabel];
+
+  const parsed = Number(result);
+  if (!Number.isFinite(parsed)) return null;
+  return parsed <= getResultPositiveThreshold() ? "negative" : "positive";
 };
 
 /** Returns the i18n key for the result label, or null if unrecognized. */
 export const getResultLabelKey = (result: string): string | null => {
-  if (!result) return null;
-  // CLAM class label
-  if (CLAM_LABEL_MAP[result]) return CLAM_LABEL_MAP[result];
-  // Legacy numeric result
-  const parsed = parseFloat(result);
-  if (!Number.isFinite(parsed)) return null;
-  return parsed <= getResultPositiveThreshold()
-    ? "recordTable_geneInfo_evaluationResult_non_metastasis"
-    : "recordTable_geneInfo_evaluationResult_metastasis";
+  const kind = getResultKind(result);
+  return kind ? RESULT_LABEL_KEY[kind] : null;
 };
 
 /** Returns the Ant Design Tag color for the given result. */
 export const getResultTagColor = (result: string): string => {
-  if (CLAM_TAG_COLOR[result]) return CLAM_TAG_COLOR[result];
-  const parsed = parseFloat(result);
-  if (!Number.isFinite(parsed)) return "default";
-  return parsed <= getResultPositiveThreshold() ? "success" : "volcano";
+  const kind = getResultKind(result);
+  if (kind === "negative") return "success";
+  if (kind === "positive") return "volcano";
+  if (kind === "borderline") return "warning";
+  return "default";
 };
 
 export const isNonMetastasisResult = (
   result: string,
   threshold: number = getResultPositiveThreshold()
 ) => {
-  // CLAM: "N" is negative (normal)
-  if (result === "N") return true;
-  if (result === "R" || result === "B") return false;
-  // Legacy numeric
-  return parseFloat(result) <= threshold;
+  const workerClass = parseWorkerClass(result);
+  if (workerClass !== null) return workerClass === 0;
+  const clamLabel = result.trim().toUpperCase();
+  if (clamLabel === "N") return true;
+  if (clamLabel === "P" || clamLabel === "R" || clamLabel === "B") return false;
+  return Number(result) <= threshold;
 };
 
 export const isEvaluationResultAvailable = (result: string | undefined) => {
-  if (!result) return false;
-  // CLAM class label
-  if (CLAM_LABEL_MAP[result]) return true;
-  // Legacy numeric
-  const parsed = parseFloat(result);
-  return Number.isFinite(parsed);
+  return Boolean(result && getResultKind(result));
 };

@@ -15,6 +15,7 @@
   "notification_export_success_message": "Export completed",
   "notification_export_error_message": "Export failed",
   "notification_recordCreate_success_message": "Record Create Success",
+  "notification_recordCreate_time_elapsed": "Total {{seconds}}s elapsed",
   "notification_recordCreate_error_message": "Record Create Error",
   "notification_recordCreate_error_description": "",
   "notification_recordDelete_success_message": "Record Delete Success",

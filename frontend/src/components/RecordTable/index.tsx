@@ -66,10 +66,37 @@ import { buildCsvContent, objectArr2csv } from "../../utils/recordParser";
 import DraggableModal from "../DraggableModal";
 import {
   filterVisibleRecords,
+  getResultLabelKey,
+  getResultTagColor,
 } from "./recordTable.logic";
 import styles from "./record-table.module.css";
 // import { ellipsisText } from "../../utils/ellipsisText";
 // import { openReportPreviewer } from "../../store/reportPreviewer";
+
+const EvaluationResultTag = ({
+  result,
+  deleted = false,
+}: {
+  result: string;
+  deleted?: boolean;
+}) => {
+  const { t } = useTranslation();
+  const labelKey = getResultLabelKey(result);
+  const label = labelKey ? t(labelKey) : result || t("recordTable_notAvailable");
+  return (
+    <Tag color={deleted ? "default" : getResultTagColor(result)}>
+      <span
+        style={
+          deleted
+            ? { textDecoration: "line-through", color: "#666" }
+            : undefined
+        }
+      >
+        {label}
+      </span>
+    </Tag>
+  );
+};
 
 const HeatmapPreview = ({
   uploadId,
@@ -321,16 +348,11 @@ const RecordTable = () => {
       {
         key: "18",
         label: t("recordTable_geneInfo_evaluationResult"),
-        children: record.isDeleted ? (
-          <Tag color="default">
-            <span style={{ textDecoration: "line-through", color: "#666" }}>
-              {record.result || t("recordTable_notAvailable")}
-            </span>
-          </Tag>
-        ) : (
-          <Tag color="default">
-            {record.result || t("recordTable_notAvailable")}
-          </Tag>
+        children: (
+          <EvaluationResultTag
+            result={record.result}
+            deleted={Boolean(record.isDeleted)}
+          />
         ),
       },
       {
@@ -627,18 +649,12 @@ const RecordTable = () => {
       title: t("recordTable_geneInfo_evaluationResult"),
       dataIndex: "result",
       key: "result",
-      render: (text, record) =>
-        record.isDeleted ? (
-          <Tag color="default">
-            <span style={{ textDecoration: "line-through", color: "#666" }}>
-              {record.result || t("recordTable_notAvailable")}
-            </span>
-          </Tag>
-        ) : (
-          <Tag color="default">
-            {record.result || t("recordTable_notAvailable")}
-          </Tag>
-        ),
+      render: (text, record) => (
+        <EvaluationResultTag
+          result={record.result}
+          deleted={Boolean(record.isDeleted)}
+        />
+      ),
       align: "center",
       width: 80,
     },

@@ -15,11 +15,11 @@ export type RuntimePaths = {
 
 export const resolveRuntimePaths = (nodeEnv?: string): RuntimePaths => {
   const env = parseElectronEnv(process.env);
-  const isDev = nodeEnv === "development";
-  const envLabel: RuntimePaths["envLabel"] = isDev ? "dev" : "prod";
-  const rootDir = isDev
-    ? process.cwd()
-    : env.PORTABLE_EXECUTABLE_DIR || path.dirname(app.getPath("exe"));
+  const isPackaged = app.isPackaged;
+  const envLabel: RuntimePaths["envLabel"] = isPackaged ? "prod" : "dev";
+  const rootDir = isPackaged
+    ? env.PORTABLE_EXECUTABLE_DIR || path.dirname(app.getPath("exe"))
+    : path.resolve(app.getAppPath(), "..");
   const modelDir = env.MODEL_DIR || path.join(rootDir, "assets", "models");
 
   const pythonExePath =

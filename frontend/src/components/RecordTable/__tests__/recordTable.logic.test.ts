@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   filterVisibleRecords,
   formatCt,
+  getResultKind,
+  getResultLabelKey,
+  getResultTagColor,
   isNonMetastasisResult,
 } from "../recordTable.logic";
 describe("recordTable.logic", () => {
@@ -30,5 +33,19 @@ describe("recordTable.logic", () => {
     expect(isNonMetastasisResult("0.3108", threshold)).toBe(true);
     expect(isNonMetastasisResult("0.2", threshold)).toBe(true);
     expect(isNonMetastasisResult("0.9", threshold)).toBe(false);
+  });
+  it("maps raw worker classes without exposing probability", () => {
+    const negative = "class=0(N) prob=0.8730";
+    const positive = "class=1(P) prob=0.9123";
+    expect(getResultKind(negative)).toBe("negative");
+    expect(getResultLabelKey(negative)).toBe(
+      "recordTable_geneInfo_evaluationResult_non_metastasis",
+    );
+    expect(getResultTagColor(negative)).toBe("success");
+    expect(getResultKind(positive)).toBe("positive");
+    expect(getResultLabelKey(positive)).toBe(
+      "recordTable_geneInfo_evaluationResult_metastasis",
+    );
+    expect(getResultTagColor(positive)).toBe("volcano");
   });
 });
