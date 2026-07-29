@@ -75,16 +75,18 @@ import styles from "./record-table.module.css";
 
 const EvaluationResultTag = ({
   result,
+  modelType,
   deleted = false,
 }: {
   result: string;
+  modelType?: string;
   deleted?: boolean;
 }) => {
   const { t } = useTranslation();
-  const labelKey = getResultLabelKey(result);
+  const labelKey = getResultLabelKey(result, modelType);
   const label = labelKey ? t(labelKey) : result || t("recordTable_notAvailable");
   return (
-    <Tag color={deleted ? "default" : getResultTagColor(result)}>
+    <Tag color={deleted ? "default" : getResultTagColor(result, modelType)}>
       <span
         style={
           deleted
@@ -351,6 +353,7 @@ const RecordTable = () => {
         children: (
           <EvaluationResultTag
             result={record.result}
+            modelType={record.modelType}
             deleted={Boolean(record.isDeleted)}
           />
         ),
@@ -652,6 +655,7 @@ const RecordTable = () => {
       render: (text, record) => (
         <EvaluationResultTag
           result={record.result}
+          modelType={record.modelType}
           deleted={Boolean(record.isDeleted)}
         />
       ),

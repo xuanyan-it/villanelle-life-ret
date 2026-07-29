@@ -158,23 +158,33 @@ const Diagnosis = (props) => {
 export default Diagnosis;
 const DiagnosisBlock = (props) => {
   const { record, content } = props;
-  const resultKind = getResultKind(record.result);
+  const resultKind = getResultKind(record.result, record.modelType);
   const resultText =
-    resultKind === "negative"
-      ? content.testResult_negative
-      : resultKind === "positive"
-        ? content.testResult_positive
-        : resultKind === "borderline"
-          ? content.testResult_borderline
-          : content.testResult_unavailable;
+    resultKind === "nonRet"
+      ? content.testResult_nonRet
+      : resultKind === "negative"
+        ? content.testResult_negative
+        : resultKind === "ret"
+          ? content.testResult_ret
+          : resultKind === "brafv600e"
+            ? content.testResult_brafv600e
+            : resultKind === "brafTert"
+              ? content.testResult_brafTert
+              : resultKind === "ras"
+                ? content.testResult_ras
+                : content.testResult_unavailable;
   const resultColor =
-    resultKind === "negative"
+    resultKind === "negative" || resultKind === "nonRet"
       ? "green"
-      : resultKind === "positive"
+      : resultKind === "ret"
         ? "red"
-        : resultKind === "borderline"
-          ? "#d48806"
-          : "#666";
+        : resultKind === "brafv600e"
+          ? "#1677ff"
+          : resultKind === "brafTert"
+            ? "#c41d7f"
+            : resultKind === "ras"
+              ? "#d48806"
+              : "#666";
   return (
     <View style={styles.diagnosisBlock}>
       

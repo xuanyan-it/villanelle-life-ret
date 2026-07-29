@@ -37,15 +37,29 @@ describe("recordTable.logic", () => {
   it("maps raw worker classes without exposing probability", () => {
     const negative = "class=0(N) prob=0.8730";
     const positive = "class=1(P) prob=0.9123";
-    expect(getResultKind(negative)).toBe("negative");
-    expect(getResultLabelKey(negative)).toBe(
-      "recordTable_geneInfo_evaluationResult_non_metastasis",
+    expect(getResultKind(negative, "2class")).toBe("nonRet");
+    expect(getResultLabelKey(negative, "2class")).toBe(
+      "recordTable_geneInfo_evaluationResult_nonRet",
     );
-    expect(getResultTagColor(negative)).toBe("success");
-    expect(getResultKind(positive)).toBe("positive");
-    expect(getResultLabelKey(positive)).toBe(
-      "recordTable_geneInfo_evaluationResult_metastasis",
+    expect(getResultTagColor(negative, "2class")).toBe("success");
+    expect(getResultKind(positive, "2class")).toBe("ret");
+    expect(getResultLabelKey(positive, "2class")).toBe(
+      "recordTable_geneInfo_evaluationResult_ret",
     );
-    expect(getResultTagColor(positive)).toBe("volcano");
+    expect(getResultTagColor(positive, "2class")).toBe("volcano");
+  });
+
+  it("maps every class by model type", () => {
+    expect(getResultKind("class=0(Negative) prob=0.9", "3class")).toBe("negative");
+    expect(getResultKind("class=1(RET) prob=0.9", "3class")).toBe("ret");
+    expect(getResultKind("class=2(BRAFV600E) prob=0.9", "3class")).toBe("brafv600e");
+
+    expect(getResultKind("class=0(Negative) prob=0.9", "5class")).toBe("negative");
+    expect(getResultKind("class=1(RET) prob=0.9", "5class")).toBe("ret");
+    expect(getResultKind("class=2(BRAFV600E) prob=0.9", "5class")).toBe("brafv600e");
+    expect(getResultKind("class=3(BRAF+TERT) prob=0.9", "5class")).toBe("brafTert");
+    expect(getResultKind("class=4(RAS) prob=0.9", "5class")).toBe("ras");
+    expect(getResultTagColor("class=3(BRAF+TERT)", "5class")).toBe("magenta");
+    expect(getResultTagColor("class=4(RAS)", "5class")).toBe("gold");
   });
 });

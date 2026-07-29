@@ -63,19 +63,23 @@ MODEL_CONFIGS = {
     "2class": {
         "path": Path(os.environ.get("CLAM_2CLASS_CKPT", str(_PROJ / "2class.pt"))),
         "n_classes": 2,
-        "labels": {0: "N", 1: "P"},
+        "labels": {0: "Non-RET", 1: "RET"},
     },
     "3class": {
         "path": Path(os.environ.get("CLAM_3CLASS_CKPT", str(_PROJ / "3class.pt"))),
         "n_classes": 3,
-        "labels": {0: "N", 1: "R", 2: "B"},
+        "labels": {0: "Negative", 1: "RET", 2: "BRAFV600E"},
     },
     "5class": {
         "path": Path(os.environ.get("CLAM_5CLASS_CKPT", str(_PROJ / "5class.pt"))),
         "n_classes": 5,
-        # The repository does not define medical names for these five outputs.
-        # Keep their original class indexes instead of inventing a mapping.
-        "labels": {index: str(index) for index in range(5)},
+        "labels": {
+            0: "Negative",
+            1: "RET",
+            2: "BRAFV600E",
+            3: "BRAF+TERT",
+            4: "RAS",
+        },
     },
 }
 
