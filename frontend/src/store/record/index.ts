@@ -3,6 +3,7 @@ export {
   recordThunkTypes,
   setCurrentPage,
   setDeletedOnly,
+  setEvaluationProgressPercent,
   setSearchKeyword,
   setPageSize,
   setSelectedRows,

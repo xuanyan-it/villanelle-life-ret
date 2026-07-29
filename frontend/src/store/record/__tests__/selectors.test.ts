@@ -61,6 +61,18 @@ describe("record selectors", () => {
     expect(selectBatchCompletedCount(state)).toBe(3);
     expect(selectBatchProgressPercent(state)).toBe(60);
   });
+  test("uses worker progress while an evaluation is running", () => {
+    const state = makeState({
+      testQueueLength: 1,
+      testQueue: [{}],
+      evaluationProgressPercent: 40,
+    });
+    expect(selectBatchProgressPercent(state)).toBe(40);
+    expect(selectBatchProgressState(state)).toMatchObject({
+      progressPercent: 40,
+      isBusy: true,
+    });
+  });
   test("returns idle state when queue is empty", () => {
     const state = makeState();
     expect(selectBatchProgressState(state)).toEqual({

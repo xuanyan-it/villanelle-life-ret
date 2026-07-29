@@ -9,7 +9,7 @@ import { SharedClientErrorMessage } from "@villanelle/ret-shared/contracts";
 import { getElectronLogger } from "../infrastructure/logger";
 import type { SampleRecord } from "../types";
 
-const NODE_ENV = process.env.NODE_ENV;
+const NODE_ENV = app.isPackaged ? "production" : "development";
 let DB_PATH: string;
 const logger = getElectronLogger();
 
@@ -34,6 +34,15 @@ const getPortableDir = () => {
 if (NODE_ENV === "development") {
   // The current application directory should be the root project dir
   DB_PATH = path.join(getDevRoot(), "./build/electron/database/db.db");
+  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+  const legacyDbPath = path.join(path.dirname(app.getPath("exe")), "db.db");
+  if (!fs.existsSync(DB_PATH) && fs.existsSync(legacyDbPath)) {
+    fs.copyFileSync(legacyDbPath, DB_PATH);
+    logger.info("[db] migrated legacy development database", {
+      from: legacyDbPath,
+      to: DB_PATH,
+    });
+  }
   logger.info("[db] resolved path", { nodeEnv: NODE_ENV, dbPath: DB_PATH });
 } else {
   const portableDir = getPortableDir();

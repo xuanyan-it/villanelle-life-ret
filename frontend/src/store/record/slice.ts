@@ -4,6 +4,7 @@ import {
   abortTestQueue,
   setCurrentPage,
   setDeletedOnly,
+  setEvaluationProgressPercent,
   setSearchKeyword,
   setPageSize,
   setSelectedRows,
@@ -57,10 +58,17 @@ const recordSlice = createSlice({
       })
       .addCase(setTestQueueLength, (state, action) => {
         state.testQueueLength = action.payload;
+        if (action.payload === 0) {
+          state.evaluationProgressPercent = null;
+        }
+      })
+      .addCase(setEvaluationProgressPercent, (state, action) => {
+        state.evaluationProgressPercent = action.payload;
       })
       .addCase(abortTestQueue, (state) => {
         state.testQueueLength = 0;
         state.testQueue = [];
+        state.evaluationProgressPercent = null;
       })
       .addCase(fetchSampleRecordAsync.pending, (state, action) => {
         state.activeFetchRequestId = action.meta.requestId;

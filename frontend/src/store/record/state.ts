@@ -13,4 +13,5 @@ export const initialState: RecordState = {
   selectedRowsByPage: [],
   testQueueLength: 0,
   testQueue: [],
+  evaluationProgressPercent: null,
 };

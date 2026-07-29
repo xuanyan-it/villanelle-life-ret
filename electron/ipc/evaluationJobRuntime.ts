@@ -121,7 +121,8 @@ export const createEvaluationJobRuntime = (deps: EvaluationJobRuntimeDeps) => {
   };
 
   const evaluateDraft = async (
-    parsedRecord: Omit<BaseRecordCreateRequest, "evaluationAsync" | "evaluationJobUuid">
+    parsedRecord: Omit<BaseRecordCreateRequest, "evaluationAsync" | "evaluationJobUuid">,
+    onProgress?: (pct: number) => void,
   ) => {
     const principal = requirePrincipalMatchingInstitute(
       parsedRecord.instituteName,
@@ -132,12 +133,15 @@ export const createEvaluationJobRuntime = (deps: EvaluationJobRuntimeDeps) => {
       parsedRecord.slideFileName,
     );
     await deps.workerManager.start(deps.workerCommand, deps.workerArgs);
-    return deps.workerManager.request({
-      slidePath,
-      modelType: parsedRecord.modelType,
-      generateHeatmap: parsedRecord.generateHeatmap,
-      uploadId: parsedRecord.uploadId,
-    });
+    return deps.workerManager.request(
+      {
+        slidePath,
+        modelType: parsedRecord.modelType,
+        generateHeatmap: parsedRecord.generateHeatmap,
+        uploadId: parsedRecord.uploadId,
+      },
+      ({ pct }) => onProgress?.(Math.max(0, Math.min(99, Math.round(pct)))),
+    );
   };
 
   const cancelAndMarkRemaining = async (jobUuid: string) => {
@@ -165,7 +169,7 @@ export const createEvaluationJobRuntime = (deps: EvaluationJobRuntimeDeps) => {
       await deps.updateEvaluationJob({
         jobUuid,
         status: "evaluating",
-        progressPercent: 50,
+        progressPercent: 1,
         errorMessage: ""
       });
       await deps.updateEvaluationJobItem({
@@ -191,7 +195,9 @@ export const createEvaluationJobRuntime = (deps: EvaluationJobRuntimeDeps) => {
         return;
       }
 
-      const probabilityStr = await evaluateDraft(recordDraft);
+      const probabilityStr = await evaluateDraft(recordDraft, (pct) => {
+        void deps.updateEvaluationJob({ jobUuid, progressPercent: pct });
+      });
 
       const jobAfterEval = await deps.getEvaluationJobByUuid(jobUuid);
       if (!jobAfterEval) return;
@@ -283,7 +289,16 @@ export const createEvaluationJobRuntime = (deps: EvaluationJobRuntimeDeps) => {
         });
 
         try {
-          const probabilityStr = await evaluateDraft(recordDrafts[i]!);
+          const probabilityStr = await evaluateDraft(recordDrafts[i]!, (pct) => {
+            const overall = Math.min(
+              99,
+              Math.round(((i + pct / 100) / total) * 100),
+            );
+            void deps.updateEvaluationJob({
+              jobUuid,
+              progressPercent: overall,
+            });
+          });
           const jobAfterEval = await deps.getEvaluationJobByUuid(jobUuid);
           if (!jobAfterEval) return;
           if (Number(jobAfterEval.cancelRequested ?? 0) === 1) {

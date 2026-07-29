@@ -2,6 +2,7 @@
   "footer_companyName": "玄言生物科技（江苏）有限公司",
   "footer_batchStatus_completed": "已完成",
   "footer_batchStatus_progress": "已完成 {{completed}}/{{total}}",
+  "footer_batchStatus_running": "正在执行中（{{percent}}%）",
   "footer_batchStatus_abortAndClear": "中止",
   "footer_batchStatus_cancelling": "正在中止中",
   "footer_batchStatus_loading": "加载中",

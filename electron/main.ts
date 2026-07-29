@@ -21,7 +21,7 @@ import { registerIpcHandlers } from "./ipc";
 
 let mainWindow: BrowserWindow;
 
-const NODE_ENV = process.env.NODE_ENV;
+const NODE_ENV = app.isPackaged ? "production" : "development";
 const DEV_SERVER_URL = "http://localhost:5173";
 const ICON_RELATIVE_PATH = path.join("assets", "app.ico");
 const GPU_SWITCHES = [
@@ -135,10 +135,24 @@ const createWindow = () => {
     hasRuntimePython,
   } = resolveRuntimePaths(NODE_ENV);
   const uploadRoot =
-    NODE_ENV === "development"
+    envLabel === "dev"
       ? path.join(rootDir, "data", "uploads")
       : path.join(path.dirname(DB_PATH), "uploads");
   const localUploadStore = createLocalUploadStore(uploadRoot);
+  const bundledSitePackages = path.join(
+    modelDir,
+    "venv-LMN-1.0",
+    "Lib",
+    "site-packages",
+  );
+  if (fs.existsSync(bundledSitePackages)) {
+    process.env.PYTHONPATH = [
+      bundledSitePackages,
+      process.env.PYTHONPATH,
+    ]
+      .filter(Boolean)
+      .join(path.delimiter);
+  }
 
   logger.info("[paths] resolved", {
     envLabel,

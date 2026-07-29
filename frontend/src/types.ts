@@ -156,6 +156,7 @@ export interface RecordState {
   selectedRowsByPage: SelectedRowsByPage[];
   testQueueLength: number;
   testQueue: SampleRecordRequestPayload[];
+  evaluationProgressPercent: number | null;
 }
 /* institute */
 export interface InstituteState {

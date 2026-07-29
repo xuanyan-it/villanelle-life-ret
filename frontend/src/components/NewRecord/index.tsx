@@ -31,6 +31,7 @@ import {
   fetchSampleRecordAsync,
   getCurrentPage,
   getDeletedOnly,
+  setEvaluationProgressPercent,
   setTestQueueLength,
   updateTestQueue,
 } from "../../store/record";
@@ -213,6 +214,7 @@ const NewRecord: React.FC = () => {
       // 让底部进度条回归：Footer 的进度依赖 Redux 的 testQueue。
       dispatch(updateTestQueue([payload as any]));
       dispatch(setTestQueueLength(1));
+      dispatch(setEvaluationProgressPercent(0));
       resetAllStates();
 
       // 轮询直到终态，并最终触发表格刷新（刷新后也会从 sessionStorage 恢复）。
@@ -224,6 +226,7 @@ const NewRecord: React.FC = () => {
           while (attempt < maxAttempts) {
             attempt++;
             const status = await api.evaluationJobStatus({ jobUuid, instituteName });
+            dispatch(setEvaluationProgressPercent(status.progressPercent));
             if (status.status === "succeeded") {
               clearSingleQueue();
               const elapsedS = ((Date.now() - uploadStartTime) / 1000).toFixed(1);
@@ -377,6 +380,7 @@ const NewRecord: React.FC = () => {
       // 刷新恢复：同样触发 Footer 进度条（pending=1）。
       dispatch(updateTestQueue([{} as any]));
       dispatch(setTestQueueLength(1));
+      dispatch(setEvaluationProgressPercent(0));
 
       let stopped = false;
       const run = async () => {
@@ -387,6 +391,7 @@ const NewRecord: React.FC = () => {
           while (!stopped && attempt < maxAttempts) {
             attempt++;
             const status = await api.evaluationJobStatus({ jobUuid, instituteName });
+            dispatch(setEvaluationProgressPercent(status.progressPercent));
             if (status.status === "succeeded") {
               dispatch(updateTestQueue([]));
               dispatch(setTestQueueLength(0));
@@ -448,6 +453,7 @@ const NewRecord: React.FC = () => {
 
         dispatch(setTestQueueLength(totalCount));
         dispatch(updateTestQueue(new Array(pendingCount).fill({} as any)));
+        dispatch(setEvaluationProgressPercent(active.jobs[0].progressPercent));
 
         const intervalMs = 1000;
         const maxAttempts = 900;
@@ -455,6 +461,7 @@ const NewRecord: React.FC = () => {
         while (!stopped && attempt < maxAttempts) {
           attempt++;
           const status = await api.evaluationJobStatus({ jobUuid, instituteName });
+          dispatch(setEvaluationProgressPercent(status.progressPercent));
 
           const pending = status.items.filter(
             (it) => it.itemStatus === "pending" || it.itemStatus === "evaluating"
@@ -537,6 +544,7 @@ const NewRecord: React.FC = () => {
       // 用 job 的 items 状态映射进度条：testQueueLength=总数，testQueue=pending/ evaluating 的数量
       dispatch(setTestQueueLength(requestPayloadArr.length));
       dispatch(updateTestQueue(new Array(requestPayloadArr.length).fill({} as any)));
+      dispatch(setEvaluationProgressPercent(0));
 
       // 立刻关闭导入弹窗，不要阻塞 UI 等待轮询结束
       resetAllStates({ resetForms: false });
@@ -550,6 +558,7 @@ const NewRecord: React.FC = () => {
           while (attempt < maxAttempts) {
             attempt++;
             const status = await api.evaluationJobStatus({ jobUuid, instituteName });
+            dispatch(setEvaluationProgressPercent(status.progressPercent));
 
             const pendingCount = status.items.filter(
               (it) => it.itemStatus === "pending" || it.itemStatus === "evaluating"

@@ -15,6 +15,7 @@ type WorkerReadyMessage = {
 type PendingRequest = {
   resolve: (value: string) => void;
   reject: (reason?: Error) => void;
+  onProgress?: (progress: { pct: number; step: string }) => void;
 };
 
 type ReadyWaiter = {
@@ -167,6 +168,22 @@ export const createWorkerManager = ({
             const id = String(message?.id ?? "");
             const pending = workerPending.get(id);
             if (!pending) return;
+            if (message?.type === "progress") {
+              const pct = Number(message?.pct);
+              const step = String(message?.step ?? "");
+              if (Number.isFinite(pct)) {
+                pending.onProgress?.({ pct, step });
+                emitShellOutput(`[worker] progress: ${pct}% ${step}`.trim());
+              }
+              return;
+            }
+            if (typeof message?.ok !== "boolean") {
+              logger.warn("[worker] ignored non-terminal response", {
+                id,
+                type: String(message?.type ?? ""),
+              });
+              return;
+            }
             workerPending.delete(id);
             if (message?.ok) {
               pending.resolve(String(message.result ?? ""));
@@ -229,6 +246,7 @@ export const createWorkerManager = ({
 
   const request = async (
     payload: Record<string, string | boolean | number>,
+    onProgress?: (progress: { pct: number; step: string }) => void,
   ) => {
     await waitForWorkerReady();
     const proc = workerProcess;
@@ -238,7 +256,7 @@ export const createWorkerManager = ({
     const id = String(++workerRequestSeq);
     const message = JSON.stringify({ id, cmd: "predict", ...payload });
     return await new Promise<string>((resolve, reject) => {
-      workerPending.set(id, { resolve, reject });
+      workerPending.set(id, { resolve, reject, onProgress });
       proc.stdin.write(message + "\n");
     });
   };

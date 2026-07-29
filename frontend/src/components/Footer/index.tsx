@@ -20,7 +20,6 @@ const Footer = () => {
   const {
     totalCount,
     pendingCount,
-    completedCount,
     progressPercent,
     isBusy: isQueueBusy,
     isCompleted: isQueueCompleted,
@@ -94,9 +93,8 @@ const Footer = () => {
                 <Typography.Text>
                   {progressPercent === 100
                     ? t("footer_batchStatus_completed")
-                    : t("footer_batchStatus_progress", {
-                        completed: completedCount,
-                        total: totalCount,
+                    : t("footer_batchStatus_running", {
+                        percent: Math.round(progressPercent),
                       })}
                 </Typography.Text>
               </Flex>
@@ -143,7 +141,7 @@ const Footer = () => {
                 <Progress
                   percentPosition={{ align: "center", type: "inner" }}
                   percent={progressPercent}
-                  format={() => null}
+                  format={(percent) => `${Math.round(percent ?? 0)}%`}
                   style={{ cursor: "pointer" }}
                 />
               )}

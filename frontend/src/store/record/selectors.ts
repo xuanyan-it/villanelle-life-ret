@@ -33,9 +33,16 @@ export const selectBatchCompletedCount = createSelector(
 export const selectBatchProgressPercent = createSelector(
   selectBatchTotalCount,
   selectBatchPendingCount,
-  (total, pending) => {
+  (state: RootState) => state.record.evaluationProgressPercent,
+  (total, pending, evaluationProgressPercent) => {
     if (!total) {
       return 0;
+    }
+    if (
+      pending > 0 &&
+      typeof evaluationProgressPercent === "number"
+    ) {
+      return evaluationProgressPercent;
     }
     if (pending === 0) {
       return 100;

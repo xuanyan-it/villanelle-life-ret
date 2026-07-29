@@ -3,6 +3,7 @@ import { describe, expect, test, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   registerAuthHandlers: vi.fn(),
   registerFileHandlers: vi.fn(),
+  registerUploadHandlers: vi.fn(),
   registerRecordHandlers: vi.fn(),
   registerSystemHandlers: vi.fn()
 }));
@@ -13,6 +14,10 @@ vi.mock("../authHandlers", () => ({
 
 vi.mock("../fileHandlers", () => ({
   registerFileHandlers: mocks.registerFileHandlers
+}));
+
+vi.mock("../uploadHandlers", () => ({
+  registerUploadHandlers: mocks.registerUploadHandlers
 }));
 
 vi.mock("../recordHandlers", () => ({
@@ -51,6 +56,7 @@ describe("registerIpcHandlers", () => {
 
     expect(mocks.registerAuthHandlers).toHaveBeenCalledWith(context);
     expect(mocks.registerFileHandlers).toHaveBeenCalledWith(context);
+    expect(mocks.registerUploadHandlers).toHaveBeenCalledWith(context);
     expect(mocks.registerRecordHandlers).toHaveBeenCalledWith(context);
     expect(mocks.registerSystemHandlers).toHaveBeenCalledWith(context);
   });
@@ -78,6 +84,7 @@ describe("registerIpcHandlers", () => {
 
     expect(mocks.registerAuthHandlers).toHaveBeenCalledTimes(1);
     expect(mocks.registerFileHandlers).toHaveBeenCalledTimes(1);
+    expect(mocks.registerUploadHandlers).toHaveBeenCalledTimes(1);
     expect(mocks.registerRecordHandlers).toHaveBeenCalledTimes(1);
     expect(mocks.registerSystemHandlers).toHaveBeenCalledTimes(1);
   });

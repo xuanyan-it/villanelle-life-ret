@@ -30,4 +30,5 @@ extraResources:
       - "**/*"
 win:
   icon: assets/app.ico
+  signAndEditExecutable: false
 publish: null

@@ -51,13 +51,17 @@ describe("createWorkerManager", () => {
     proc.emit("spawn");
     await startPromise;
 
-    const requestPromise = manager.request({
-      DET_PKHD1L1: "1",
-      DET_RPS4Y1: "2",
-      DET_CRABP1: "3",
-      Gender: "1",
-      sampleType: "r",
-    });
+    const onProgress = vi.fn();
+    const requestPromise = manager.request(
+      {
+        DET_PKHD1L1: "1",
+        DET_RPS4Y1: "2",
+        DET_CRABP1: "3",
+        Gender: "1",
+        sampleType: "r",
+      },
+      onProgress,
+    );
 
     expect(proc.stdin.write).not.toHaveBeenCalled();
 
@@ -74,6 +78,11 @@ describe("createWorkerManager", () => {
     const sentPayload = String(proc.stdin.write.mock.calls[0][0]);
     expect(sentPayload).toContain('"id":"1"');
     expect(sentPayload).toContain('"cmd":"predict"');
+
+    lineHandler?.(
+      JSON.stringify({ type: "progress", id: "1", pct: 40, step: "features" }),
+    );
+    expect(onProgress).toHaveBeenCalledWith({ pct: 40, step: "features" });
 
     lineHandler?.(
       JSON.stringify({ id: "1", ok: true, result: "class=0(N) prob=0.7300" }),

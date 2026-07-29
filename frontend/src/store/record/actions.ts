@@ -20,4 +20,7 @@ export const updateTestQueue =
   createAction<SampleRecordRequestPayload[]>("record/updateTestQueue");
 export const setTestQueueLength =
   createAction<number>("record/setTestQueueLength");
+export const setEvaluationProgressPercent = createAction<number | null>(
+  "record/setEvaluationProgressPercent",
+);
 export const abortTestQueue = createAction("record/abortTestQueue");
