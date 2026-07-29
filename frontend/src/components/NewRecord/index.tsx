@@ -11,6 +11,7 @@ import {
   Dropdown,
   Flex,
   Form,
+  Progress,
   Steps,
   Tooltip,
   Typography,
@@ -98,6 +99,9 @@ const NewRecord: React.FC = () => {
   const [exitOepn, setExitOpen] = useState<boolean>(false);
   const [submitOpen, setSubmitOpen] = useState<boolean>(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadingFileName, setUploadingFileName] = useState("");
   // tab and form
   const [sampleSourceFormRef] = Form.useForm();
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
@@ -114,6 +118,9 @@ const NewRecord: React.FC = () => {
     setExitOpen(false);
     setSubmitOpen(false);
     setCurrentStep(0);
+    setIsUploading(false);
+    setUploadProgress(0);
+    setUploadingFileName("");
     setFormData({ ...initialFormData });
     setPendingFormData(null);
     resetImport();
@@ -146,31 +153,58 @@ const NewRecord: React.FC = () => {
     resetAllStates();
   };
   const handleCancelSubmit = () => {
+    if (isUploading) return;
     setSubmitOpen(false);
   };
   const handleConfirmSubmit = async () => {
     const data = pendingFormData;
     const uploadFile = (data as any)?.slideFile?.[0]?.originFileObj as File | undefined;
-    if (!data || !uploadFile) return;
+    if (!data || !uploadFile || isUploading) return;
+    setIsUploading(true);
+    setUploadProgress(0);
+    setUploadingFileName(uploadFile.name);
     const uploadStartTime = Date.now();
     const current = dayjs().toISOString();
     const resumeKey = `ret-svs-upload:${uploadFile.name}:${uploadFile.size}:${uploadFile.lastModified}`;
     let upload: UploadState | null = null;
-    const previousUploadId = localStorage.getItem(resumeKey);
-    if (previousUploadId) {
-      upload = await api.uploadStatus(previousUploadId);
+    try {
+      const previousUploadId = localStorage.getItem(resumeKey);
+      if (previousUploadId) {
+        upload = await api.uploadStatus(previousUploadId);
+      }
+      if (!upload) {
+        upload = await api.uploadInit(uploadFile.name, uploadFile.size);
+        localStorage.setItem(resumeKey, upload.uploadId);
+      }
+      const uploadedChunks = new Set(upload.uploadedChunks);
+      const updateUploadProgress = () => {
+        setUploadProgress(
+          Math.min(99, Math.round((uploadedChunks.size / upload!.totalChunks) * 100)),
+        );
+      };
+      updateUploadProgress();
+      for (let index = 0; index < upload.totalChunks; index += 1) {
+        if (uploadedChunks.has(index)) continue;
+        const chunk = uploadFile.slice(index * upload.chunkSize, Math.min(uploadFile.size, (index + 1) * upload.chunkSize));
+        await api.uploadChunk(upload.uploadId, index, chunk);
+        uploadedChunks.add(index);
+        updateUploadProgress();
+      }
+      await api.uploadComplete(upload.uploadId);
+      setUploadProgress(100);
+      localStorage.removeItem(resumeKey);
+    } catch {
+      setIsUploading(false);
+      dispatch(
+        pushNotification({
+          type: "error",
+          message: "notification_recordCreate_error_message",
+          description: "notification_recordCreate_error_description"
+        })
+      );
+      return;
     }
-    if (!upload) {
-      upload = await api.uploadInit(uploadFile.name, uploadFile.size);
-      localStorage.setItem(resumeKey, upload.uploadId);
-    }
-    for (let index = 0; index < upload.totalChunks; index += 1) {
-      if (upload.uploadedChunks.includes(index)) continue;
-      const chunk = uploadFile.slice(index * upload.chunkSize, Math.min(uploadFile.size, (index + 1) * upload.chunkSize));
-      await api.uploadChunk(upload.uploadId, index, chunk);
-    }
-    await api.uploadComplete(upload.uploadId);
-    localStorage.removeItem(resumeKey);
+
     const payload = {
       /*sample source basics */
       uploadId: upload.uploadId,
@@ -279,6 +313,7 @@ const NewRecord: React.FC = () => {
     } catch {
       clearSingleQueue();
       setSubmitOpen(false);
+      setIsUploading(false);
       dispatch(
         pushNotification({
           type: "error",
@@ -475,7 +510,20 @@ const NewRecord: React.FC = () => {
             dispatch(fetchSampleRecordAsync({ page: currentPage, deletedOnly }));
             return;
           }
-          if (status.status === "failed" || status.status === "cancelled") {
+          if (status.status === "cancelled") {
+            dispatch(updateTestQueue([]));
+            dispatch(setTestQueueLength(0));
+            dispatch(
+              pushNotification({
+                type: "info",
+                message: "notification_evaluation_cancelled_message",
+                description: "notification_evaluation_cancelled_description",
+              })
+            );
+            dispatch(fetchSampleRecordAsync({ page: currentPage, deletedOnly }));
+            return;
+          }
+          if (status.status === "failed") {
             dispatch(updateTestQueue([]));
             dispatch(setTestQueueLength(0));
             dispatch(
@@ -586,7 +634,21 @@ const NewRecord: React.FC = () => {
               dispatch(fetchSampleRecordAsync({ page: currentPage, deletedOnly }));
               return;
             }
-            if (status.status === "failed" || status.status === "cancelled") {
+            if (status.status === "cancelled") {
+              dispatch(updateTestQueue([]));
+              dispatch(setTestQueueLength(0));
+              const elapsedS = ((Date.now() - batchStartTime) / 1000).toFixed(1);
+              dispatch(
+                pushNotification({
+                  type: "info",
+                  message: "notification_evaluation_cancelled_message",
+                  description: `${t("notification_evaluation_cancelled_description")} (${elapsedS}s)`,
+                })
+              );
+              dispatch(fetchSampleRecordAsync({ page: currentPage, deletedOnly }));
+              return;
+            }
+            if (status.status === "failed") {
               dispatch(updateTestQueue([]));
               dispatch(setTestQueueLength(0));
               const elapsedS = ((Date.now() - batchStartTime) / 1000).toFixed(1);
@@ -695,6 +757,7 @@ const NewRecord: React.FC = () => {
             key="cancelSubmit"
             type="default"
             onClick={handleCancelSubmit}
+            disabled={isUploading}
           >
             {t("newRecord_cancel")}
           </Button>,
@@ -702,6 +765,7 @@ const NewRecord: React.FC = () => {
             key="confirmSubmit"
             type="primary"
             onClick={handleConfirmSubmit}
+            loading={isUploading}
           >
             {t("newRecord_confirm")}
           </Button>,
@@ -709,7 +773,28 @@ const NewRecord: React.FC = () => {
         destroyOnHidden
         centered
       >
-        {t("newRecord_confirmSubmit_content")}
+        {isUploading ? (
+          <Flex vertical gap={12}>
+            <Typography.Text ellipsis={{ tooltip: uploadingFileName }}>
+              {uploadingFileName}
+            </Typography.Text>
+            <Typography.Text strong>
+              {uploadProgress < 100
+                ? t("newRecord_fileUploading", { percent: uploadProgress })
+                : t("newRecord_fileUploadCreatingTask")}
+            </Typography.Text>
+            <Progress
+              percent={uploadProgress}
+              status={uploadProgress < 100 ? "active" : "success"}
+              strokeColor={{ from: "#1677ff", to: "#52c41a" }}
+            />
+            <Typography.Text type="secondary">
+              {t("newRecord_fileUploadHint")}
+            </Typography.Text>
+          </Flex>
+        ) : (
+          t("newRecord_confirmSubmit_content")
+        )}
       </DraggableModal>
     </>
   );

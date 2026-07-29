@@ -29,5 +29,9 @@
   "notification_fetchUserList_error_description": "Please check institute and network status",
   "notification_recordDelete_error_description": "",
   "notification_alof_lock_message": "Workspace Protected",
-  "notification_alof_lock_description": "Session ended due to inactivity. Please login again."
+  "notification_alof_lock_description": "Session ended due to inactivity. Please login again.",
+  "notification_importMany_enqueue_failed_message": "Batch evaluation failed",
+  "notification_importMany_enqueue_failed_description": "Batch evaluation was interrupted. Review the error and retry.",
+  "notification_evaluation_cancelled_message": "Evaluation cancelled",
+  "notification_evaluation_cancelled_description": "The task was stopped and unfinished samples were not saved."
 }

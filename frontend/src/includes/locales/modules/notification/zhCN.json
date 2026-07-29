@@ -27,5 +27,9 @@
   "notification_tokenVerification_error_description": "请确认授权码输入正确",
   "notification_fetchUserList_error_message": "获取用户列表失败",
   "notification_fetchUserList_error_description": "请检查机构信息和网络状态",
-  "notification_recordDelete_error_description": ""
+  "notification_recordDelete_error_description": "",
+  "notification_importMany_enqueue_failed_message": "批量评估失败",
+  "notification_importMany_enqueue_failed_description": "批量评估执行中断，请查看错误信息后重试",
+  "notification_evaluation_cancelled_message": "评估已取消",
+  "notification_evaluation_cancelled_description": "任务已停止，未完成的样本不会写入结果"
 }
