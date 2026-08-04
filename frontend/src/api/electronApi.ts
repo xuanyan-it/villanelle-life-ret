@@ -120,4 +120,6 @@ export const electronApi: ApiType = {
     call<void, { uploadId: string }>("uploadComplete", { uploadId }),
   heatmapSource: (uploadId) =>
     call<string | null, { uploadId: string }>("uploadHeatmap", { uploadId }),
+  slidePreviewSource: (uploadId) =>
+    call<string | null, { uploadId: string }>("uploadSlidePreview", { uploadId }),
 };

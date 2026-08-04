@@ -16,30 +16,9 @@ extraResources:
     to: web
     filter:
       - "**/*"
-  - from: ../assets/models
-    to: assets/models
-    filter:
-      - "**/*"
-      - "!test-data/**"
-      - "!**/*.svs"
-      - "!**/tests/**"
-      - "!**/test/**"
-      - "!**/__pycache__/**"
-      - "!**/*.pyc"
-      - "!**/*.pyo"
-  # NumPy 2.x imports this vendored pd_NA helper from numpy.testing at
-  # runtime. The generic tests exclusion above would otherwise remove it
-  # and make SciPy fail to import in packaged builds.
-  - from: ../assets/models/venv-LMN-1.0/Lib/site-packages/numpy/_core/tests
-    to: assets/models/venv-LMN-1.0/Lib/site-packages/numpy/_core/tests
-    filter:
-      - "__init__.py"
-      - "_natype.py"
-  - from: ../assets/openslide
-    to: assets/openslide
-    filter:
-      - "**/*"
+  - from: assets/app.ico
+    to: assets/app.ico
 win:
-  icon: assets/app.ico
+  icon: app.ico
   signAndEditExecutable: false
 publish: null

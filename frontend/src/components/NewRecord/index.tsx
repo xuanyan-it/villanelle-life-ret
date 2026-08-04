@@ -42,6 +42,7 @@ import {
   NewMissionType,
 } from "../../types";
 import DraggableModal from "../DraggableModal";
+import { SvsViewer } from "../SvsViewer";
 import SampleSourceForm from "./forms/SampleSourceForm";
 /* styles */
 import styles from "./new-record.module.css";
@@ -102,6 +103,7 @@ const NewRecord: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadingFileName, setUploadingFileName] = useState("");
+  const [reviewUploadId, setReviewUploadId] = useState<string | null>(null);
   // tab and form
   const [sampleSourceFormRef] = Form.useForm();
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
@@ -123,6 +125,7 @@ const NewRecord: React.FC = () => {
     setUploadingFileName("");
     setFormData({ ...initialFormData });
     setPendingFormData(null);
+    setReviewUploadId(null);
     resetImport();
     if (resetForms) {
       sampleSourceFormRef.resetFields();
@@ -141,6 +144,54 @@ const NewRecord: React.FC = () => {
       setFormData(next);
       setPendingFormData(next);
       setCurrentStep(1);
+      // ── Start upload in background for SVS preview ──────────
+      const uploadFile = (next as any)?.slideFile?.[0]?.originFileObj as File | undefined;
+      if (uploadFile) {
+        setUploadingFileName(uploadFile.name);
+        setReviewUploadId(null);
+        try {
+          const resumeKey = `ret-svs-upload:${uploadFile.name}:${uploadFile.size}:${uploadFile.lastModified}`;
+          let upload: UploadState | null = null;
+          const previousUploadId = localStorage.getItem(resumeKey);
+          if (previousUploadId) {
+            upload = await api.uploadStatus(previousUploadId);
+            // If already fully uploaded, skip re-upload and reveal preview immediately
+            if (upload && upload.uploadedChunks.length === upload.totalChunks) {
+              await api.uploadComplete(upload.uploadId); // idempotent — no-op if already assembled
+              setUploadProgress(100);
+              setReviewUploadId(upload.uploadId);
+              return; // skip the chunk upload loop below
+            }
+          }
+          if (!upload) {
+            upload = await api.uploadInit(uploadFile.name, uploadFile.size);
+            localStorage.setItem(resumeKey, upload.uploadId);
+          }
+          // Upload chunks
+          const uploadedChunks = new Set(upload.uploadedChunks);
+          const updateBgProgress = () => {
+            setUploadProgress(
+              Math.min(99, Math.round((uploadedChunks.size / upload!.totalChunks) * 100)),
+            );
+          };
+          updateBgProgress();
+          for (let index = 0; index < upload.totalChunks; index += 1) {
+            if (uploadedChunks.has(index)) continue;
+            const chunk = uploadFile.slice(
+              index * upload.chunkSize,
+              Math.min(uploadFile.size, (index + 1) * upload.chunkSize),
+            );
+            await api.uploadChunk(upload.uploadId, index, chunk);
+            uploadedChunks.add(index);
+            updateBgProgress();
+          }
+          await api.uploadComplete(upload.uploadId);
+          setUploadProgress(100);
+          setReviewUploadId(upload.uploadId);
+        } catch {
+          console.warn("[NewRecord] background upload for preview failed");
+        }
+      }
     } catch (error) {}
   };
   const closeModal = () => {
@@ -172,26 +223,31 @@ const NewRecord: React.FC = () => {
       if (previousUploadId) {
         upload = await api.uploadStatus(previousUploadId);
       }
-      if (!upload) {
-        upload = await api.uploadInit(uploadFile.name, uploadFile.size);
-        localStorage.setItem(resumeKey, upload.uploadId);
-      }
-      const uploadedChunks = new Set(upload.uploadedChunks);
-      const updateUploadProgress = () => {
-        setUploadProgress(
-          Math.min(99, Math.round((uploadedChunks.size / upload!.totalChunks) * 100)),
-        );
-      };
-      updateUploadProgress();
-      for (let index = 0; index < upload.totalChunks; index += 1) {
-        if (uploadedChunks.has(index)) continue;
-        const chunk = uploadFile.slice(index * upload.chunkSize, Math.min(uploadFile.size, (index + 1) * upload.chunkSize));
-        await api.uploadChunk(upload.uploadId, index, chunk);
-        uploadedChunks.add(index);
+      // If already fully uploaded during review step, skip re-upload
+      if (upload && upload.uploadedChunks.length === upload.totalChunks) {
+        setUploadProgress(100);
+      } else {
+        if (!upload) {
+          upload = await api.uploadInit(uploadFile.name, uploadFile.size);
+          localStorage.setItem(resumeKey, upload.uploadId);
+        }
+        const uploadedChunks = new Set(upload.uploadedChunks);
+        const updateUploadProgress = () => {
+          setUploadProgress(
+            Math.min(99, Math.round((uploadedChunks.size / upload!.totalChunks) * 100)),
+          );
+        };
         updateUploadProgress();
+        for (let index = 0; index < upload.totalChunks; index += 1) {
+          if (uploadedChunks.has(index)) continue;
+          const chunk = uploadFile.slice(index * upload.chunkSize, Math.min(uploadFile.size, (index + 1) * upload.chunkSize));
+          await api.uploadChunk(upload.uploadId, index, chunk);
+          uploadedChunks.add(index);
+          updateUploadProgress();
+        }
+        await api.uploadComplete(upload.uploadId);
+        setUploadProgress(100);
       }
-      await api.uploadComplete(upload.uploadId);
-      setUploadProgress(100);
       localStorage.removeItem(resumeKey);
     } catch {
       setIsUploading(false);
@@ -376,6 +432,11 @@ const NewRecord: React.FC = () => {
       {currentStep === 0 ? newRecordForm : (
         <Flex vertical gap={16} style={{ maxHeight: "calc(100vh - 240px)", overflowY: "auto", padding: "8px 4px" }}>
           <Descriptions bordered size="small" column={2} items={previewItems} />
+          {selectedFile ? (
+            <div style={{ height: 360, borderRadius: 6, overflow: "hidden", border: "1px solid #d9d9d9" }}>
+              <SvsViewer uploadId={reviewUploadId} />
+            </div>
+          ) : null}
           <Flex justify="space-between">
             <Button onClick={() => setCurrentStep(0)}>{t("newRecord_previous")}</Button>
             <Button type="primary" onClick={() => setSubmitOpen(true)}>{t("newRecord_submit")}</Button>

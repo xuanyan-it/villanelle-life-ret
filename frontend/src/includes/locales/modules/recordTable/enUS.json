@@ -27,6 +27,8 @@
     "recordTable_geneInfo_heatmapNotRequested": "Heatmap was not requested",
     "recordTable_geneInfo_heatmapUnavailable": "Heatmap is unavailable",
     "recordTable_geneInfo_heatmapPreview": "View full size",
+    "recordTable_geneInfo_heatmapHd": "HD heatmap",
+    "recordTable_geneInfo_slidePreview": "Original SVS slide",
     "recordTable_geneInfo_evaluationResult_nonRet": "Non-RET",
     "recordTable_geneInfo_evaluationResult_negative": "Negative",
     "recordTable_geneInfo_evaluationResult_ret": "RET",

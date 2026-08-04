@@ -58,6 +58,7 @@ PATCH_SIZE = 256
 STEP_SIZE = 256
 BATCH_SIZE = 256
 FEAT_SUBDIR = "tumor_subtyping_resnet_features"
+HEATMAP_MAX_PIXELS = int(os.environ.get("CLAM_HEATMAP_MAX_PIXELS", "12000000"))
 
 MODEL_CONFIGS = {
     "2class": {
@@ -319,22 +320,45 @@ def _generate_heatmap(
     attention: np.ndarray,
     coords: np.ndarray,
 ) -> Path:
-    """Render the CLAM attention overlay into the upload's persistent output directory."""
+    """Render both the coarse block map and the high-definition slide overlay.
+
+    ``heatmap_blockmap.png`` keeps the old 32x-downsampled output for debugging.
+    ``heatmap.png`` is the production image consumed by the applications.  It
+    uses the finest native SVS pyramid level that stays inside a conservative
+    pixel budget, then smooths patch boundaries in the same way as CLAM's
+    production heatmap renderer.
+    """
     from vis_utils.heatmap_utils import drawHeatmap
+    from wsi_core.WholeSlideImage import WholeSlideImage
 
     heatmap_path = _persistent_heatmap_path(slide_path)
     output_dir = heatmap_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
-    temporary_path = output_dir / "heatmap.tmp"
+    blockmap_path = output_dir / "heatmap_blockmap.png"
+    slide_preview_path = output_dir / "slide_preview.png"
+
+    wsi_object = WholeSlideImage(slide_path)
+    coarse_level = wsi_object.wsi.get_best_level_for_downsample(32)
+    hd_level = _select_heatmap_level(wsi_object.wsi)
+
+    def save_atomic(image, destination: Path) -> None:
+        temporary_path = destination.with_suffix(destination.suffix + ".tmp")
+        try:
+            image.save(temporary_path, format="PNG")
+            os.replace(temporary_path, destination)
+        finally:
+            temporary_path.unlink(missing_ok=True)
+            image.close()
 
     # CLAM's helper prints diagnostic text to stdout. Redirect it so the
     # worker's JSON-lines protocol remains clean.
     with contextlib.redirect_stdout(sys.stderr):
-        heatmap = drawHeatmap(
+        blockmap = drawHeatmap(
             attention,
             coords,
             slide_path=slide_path,
-            vis_level=-1,
+            wsi_object=wsi_object,
+            vis_level=coarse_level,
             cmap="jet",
             alpha=0.5,
             segment=False,
@@ -345,15 +369,50 @@ def _generate_heatmap(
             patch_size=(PATCH_SIZE, PATCH_SIZE),
             convert_to_percentiles=True,
         )
-    try:
-        heatmap.save(temporary_path, format="PNG")
-        os.replace(temporary_path, heatmap_path)
-    finally:
-        temporary_path.unlink(missing_ok=True)
-        heatmap.close()
+        save_atomic(blockmap, blockmap_path)
 
-    print(f"[heatmap] saved: {heatmap_path}", file=sys.stderr, flush=True)
+        heatmap = drawHeatmap(
+            attention.copy(),
+            coords,
+            slide_path=slide_path,
+            wsi_object=wsi_object,
+            vis_level=hd_level,
+            cmap="jet",
+            alpha=0.5,
+            segment=False,
+            use_holes=False,
+            binarize=False,
+            blank_canvas=False,
+            thresh=-1,
+            patch_size=(PATCH_SIZE, PATCH_SIZE),
+            convert_to_percentiles=True,
+            blur=True,
+            overlap=0.5,
+        )
+        save_atomic(heatmap, heatmap_path)
+
+        slide_preview = wsi_object.visWSI(
+            vis_level=hd_level,
+            view_slide_only=True,
+        )
+        save_atomic(slide_preview, slide_preview_path)
+
+    wsi_object.wsi.close()
+    print(
+        f"[heatmap] saved production={heatmap_path} blockmap={blockmap_path} "
+        f"slide_preview={slide_preview_path} vis_level={hd_level}",
+        file=sys.stderr,
+        flush=True,
+    )
     return heatmap_path
+
+
+def _select_heatmap_level(wsi) -> int:
+    """Choose the clearest native pyramid level that fits the memory budget."""
+    for level, (width, height) in enumerate(wsi.level_dimensions):
+        if width * height <= HEATMAP_MAX_PIXELS:
+            return level
+    return wsi.level_count - 1
 
 
 # ==================== JSON-Lines Protocol ====================
@@ -381,6 +440,15 @@ def _parse_bool(value: object) -> bool:
 
 def _persistent_heatmap_path(slide_path: str) -> Path:
     return Path(slide_path).resolve().parent.parent / "output" / "heatmap.png"
+
+
+def _persistent_preview_paths(slide_path: str) -> tuple[Path, Path, Path]:
+    output_dir = _persistent_heatmap_path(slide_path).parent
+    return (
+        output_dir / "heatmap.png",
+        output_dir / "heatmap_blockmap.png",
+        output_dir / "slide_preview.png",
+    )
 
 
 def handle_predict(msg: dict) -> None:
@@ -420,7 +488,8 @@ def handle_predict(msg: dict) -> None:
     })
 
     if not generate_heatmap:
-        _persistent_heatmap_path(slide_path).unlink(missing_ok=True)
+        for preview_path in _persistent_preview_paths(slide_path):
+            preview_path.unlink(missing_ok=True)
 
     # Temp work directory per evaluation
     work_root = os.path.join(tempfile.gettempdir(), "ret-eval", upload_id)
@@ -489,6 +558,83 @@ def handle_predict(msg: dict) -> None:
         shutil.rmtree(work_root, ignore_errors=True)
 
 
+def handle_slide_info(msg: dict) -> None:
+    """Return slide metadata via OpenSlide.
+
+    Input:  {"id":"...", "cmd":"slide-info", "slidePath":"..."}
+    Output: {"id":"...", "ok":true, "result": "{...json...}"}
+    """
+    import json
+
+    msg_id = str(msg.get("id", ""))
+    slide_path = msg.get("slidePath", "")
+
+    if not slide_path or not os.path.isfile(slide_path):
+        write_line({"id": msg_id, "ok": False, "error": f"slide file not found: {slide_path}"})
+        return
+
+    try:
+        import openslide
+        slide = openslide.OpenSlide(slide_path)
+        try:
+            dims = slide.level_dimensions
+            downs = slide.level_downsamples
+            info = {
+                "width": slide.dimensions[0],
+                "height": slide.dimensions[1],
+                "tileWidth": int(slide.properties.get("openslide.level[0].tile-width", 256)),
+                "tileHeight": int(slide.properties.get("openslide.level[0].tile-height", 256)),
+                "levels": slide.level_count,
+                "levelDimensions": [{"width": int(w), "height": int(h)} for w, h in dims],
+                "levelDownsamples": [float(d) for d in downs],
+            }
+            write_line({"id": msg_id, "ok": True, "result": json.dumps(info)})
+        finally:
+            slide.close()
+    except Exception:
+        write_line({"id": msg_id, "ok": False, "error": traceback.format_exc()})
+
+
+def handle_extract_tile(msg: dict) -> None:
+    """Extract a single tile from an SVS slide via OpenSlide.
+
+    Input:  {"id":"...", "cmd":"extract-tile", "slidePath":"...",
+             "level":0, "x":0, "y":0,
+             "tileWidth":256, "tileHeight":256}
+    Output: {"id":"...", "ok":true, "tile":"base64png..."}
+    """
+    import base64
+    import io
+
+    msg_id = str(msg.get("id", ""))
+    slide_path = msg.get("slidePath", "")
+    level = int(msg.get("level", 0))
+    x = int(msg.get("x", 0))
+    y = int(msg.get("y", 0))
+    tile_w = int(msg.get("tileWidth", 256))
+    tile_h = int(msg.get("tileHeight", 256))
+
+    if not slide_path or not os.path.isfile(slide_path):
+        write_line({"id": msg_id, "ok": False, "error": f"slide file not found: {slide_path}"})
+        return
+
+    try:
+        import openslide
+        slide = openslide.OpenSlide(slide_path)
+        try:
+            # read_region params are in level-0 coordinates
+            region = slide.read_region((x, y), level, (tile_w, tile_h))
+            buf = io.BytesIO()
+            region.save(buf, format="PNG")
+            tile_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+            write_line({"id": msg_id, "ok": True, "result": tile_b64})
+        finally:
+            slide.close()
+    except Exception:
+        write_line({"id": msg_id, "ok": False, "error": traceback.format_exc()})
+
+
+
 def handle_message(line: str) -> None:
     """Parse one JSON request and dispatch."""
     try:
@@ -500,6 +646,10 @@ def handle_message(line: str) -> None:
     cmd = msg.get("cmd", "")
     if cmd == "predict":
         handle_predict(msg)
+    elif cmd == "extract-tile":
+        handle_extract_tile(msg)
+    elif cmd == "slide-info":
+        handle_slide_info(msg)
     else:
         write_line({"id": str(msg.get("id", "")), "ok": False, "error": f"unknown command: {cmd}"})
 

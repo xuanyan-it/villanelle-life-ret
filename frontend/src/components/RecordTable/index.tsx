@@ -110,22 +110,27 @@ const HeatmapPreview = ({
   const { t } = useTranslation();
   const [loadFailed, setLoadFailed] = useState(false);
   const [src, setSrc] = useState<string | null>(null);
+  const [slideSrc, setSlideSrc] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     setLoadFailed(false);
     setSrc(null);
+    setSlideSrc(null);
     if (!enabled || !uploadId) {
       return () => {
         active = false;
       };
     }
-    void api
-      .heatmapSource(uploadId)
-      .then((value) => {
+    void Promise.all([
+      api.heatmapSource(uploadId),
+      api.slidePreviewSource(uploadId),
+    ])
+      .then(([heatmapValue, slideValue]) => {
         if (active) {
-          setSrc(value);
-          setLoadFailed(!value);
+          setSrc(heatmapValue);
+          setSlideSrc(slideValue);
+          setLoadFailed(!heatmapValue);
         }
       })
       .catch(() => {
@@ -158,14 +163,36 @@ const HeatmapPreview = ({
 
   return (
     <div className={styles.heatmapPreview} data-testid="record-detail-heatmap">
-      <Image
-        src={src}
-        alt={t("recordTable_geneInfo_heatmap")}
-        width="100%"
-        className={styles.heatmapImage}
-        onError={() => setLoadFailed(true)}
-        preview={{ mask: t("recordTable_geneInfo_heatmapPreview") }}
-      />
+      <Image.PreviewGroup>
+        <div className={styles.slidePreviewItem}>
+          <Typography.Text type="secondary">
+            {t("recordTable_geneInfo_heatmapHd")}
+          </Typography.Text>
+          <Image
+            src={src}
+            alt={t("recordTable_geneInfo_heatmap")}
+            width="100%"
+            className={styles.heatmapImage}
+            onError={() => setLoadFailed(true)}
+            preview={{ mask: t("recordTable_geneInfo_heatmapPreview") }}
+          />
+        </div>
+        {slideSrc ? (
+          <div className={styles.slidePreviewItem}>
+            <Typography.Text type="secondary">
+              {t("recordTable_geneInfo_slidePreview")}
+            </Typography.Text>
+            <Image
+              src={slideSrc}
+              alt={t("recordTable_geneInfo_slidePreview")}
+              width="100%"
+              className={styles.heatmapImage}
+              onError={() => setSlideSrc(null)}
+              preview={{ mask: t("recordTable_geneInfo_heatmapPreview") }}
+            />
+          </div>
+        ) : null}
+      </Image.PreviewGroup>
     </div>
   );
 };

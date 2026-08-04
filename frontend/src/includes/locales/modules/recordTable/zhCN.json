@@ -27,6 +27,8 @@
     "recordTable_geneInfo_heatmapNotRequested": "未请求生成热力图",
     "recordTable_geneInfo_heatmapUnavailable": "热力图暂不可用",
     "recordTable_geneInfo_heatmapPreview": "查看大图",
+    "recordTable_geneInfo_heatmapHd": "高清热力图",
+    "recordTable_geneInfo_slidePreview": "原始 SVS 切片",
     "recordTable_geneInfo_evaluationResult_nonRet": "非RET",
     "recordTable_geneInfo_evaluationResult_negative": "Negative",
     "recordTable_geneInfo_evaluationResult_ret": "RET",

@@ -280,8 +280,11 @@ export class PythonRecordEvaluator implements RecordEvaluator, OnModuleDestroy {
     }
 
     // Resolve the SVS slide file path from upload storage
+    const projectRoot = fs.existsSync(path.join(process.cwd(), "assets"))
+      ? process.cwd()
+      : path.resolve(process.cwd(), "..");
     const uploadRoot = path.resolve(
-      this.configService.get<string>("UPLOAD_ROOT") ?? path.join(process.cwd(), "data", "uploads")
+      this.configService.get<string>("UPLOAD_ROOT") ?? path.join(projectRoot, "data", "uploads")
     );
     const slidePath = path.join(uploadRoot, record.uploadId, "input", record.slideFileName);
     if (!fs.existsSync(slidePath)) {

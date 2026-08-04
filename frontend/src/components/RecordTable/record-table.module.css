@@ -50,12 +50,21 @@
 .heatmapPreview {
   width: 100%;
   min-height: 220px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow-x: auto;
+  padding: 12px;
   border-radius: 6px;
   background: #f5f5f5;
+}
+.slidePreviewItem {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 .heatmapImage {
   max-height: 360px;

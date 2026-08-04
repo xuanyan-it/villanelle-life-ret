@@ -1,18 +1,25 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream, createWriteStream } from "node:fs";
+import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
+import { spawn } from "node:child_process";
 
 import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import type { Request } from "express";
+import type { Request, Response } from "express";
 
 import { createSanitizedLogger } from "../../common/logging/sanitized-logger";
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024;
 const DEFAULT_CHUNK_SIZE = 32 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = new Set([".svs"]);
+
+/** Resolve the monorepo project root, whether started from root or server/. */
+const resolveProjectRoot = (): string =>
+  existsSync(path.join(process.cwd(), "assets"))
+    ? process.cwd()
+    : path.resolve(process.cwd(), "..");
 
 type UploadStatus = "uploading" | "completed" | "failed";
 type UploadMetadata = {
@@ -37,7 +44,11 @@ export class UploadService {
   private readonly root: string;
 
   constructor(@Inject(ConfigService) private readonly configService: ConfigService) {
-    this.root = path.resolve(this.configService.get<string>("UPLOAD_ROOT") ?? path.join(process.cwd(), "data", "uploads"));
+    const projectRoot = resolveProjectRoot();
+    this.root = path.resolve(
+      this.configService.get<string>("UPLOAD_ROOT") ??
+        path.join(projectRoot, "data", "uploads"),
+    );
   }
 
   private uploadDir(uploadId: string): string {
@@ -118,6 +129,37 @@ export class UploadService {
     }
   }
 
+  async slidePreviewPath(uploadId: string, owner: string): Promise<string | null> {
+    await this.readMetadata(uploadId, owner);
+    const previewPath = path.join(this.uploadDir(uploadId), "output", "slide_preview.png");
+    try {
+      await fs.access(previewPath);
+      return previewPath;
+    } catch {
+      return null;
+    }
+  }
+
+  async slideFilePath(uploadId: string, owner: string): Promise<string | null> {
+    const metadata = await this.readMetadata(uploadId, owner);
+    if (metadata.storagePath && metadata.status === "completed") {
+      try {
+        await fs.access(metadata.storagePath);
+        return metadata.storagePath;
+      } catch {
+        return null;
+      }
+    }
+    // Fallback: try input/{originalFileName}
+    const fallback = path.join(this.uploadDir(uploadId), "input", metadata.originalFileName);
+    try {
+      await fs.access(fallback);
+      return fallback;
+    } catch {
+      return null;
+    }
+  }
+
   async writeChunk(uploadId: string, owner: string, index: number, request: Request) {
     const metadata = await this.readMetadata(uploadId, owner);
     if (metadata.status !== "uploading") throw new BadRequestException("upload is not active");
@@ -151,12 +193,275 @@ export class UploadService {
     }
   }
 
+  async extractTile(
+    response: Response,
+    slidePath: string,
+    opts: { level: number; x: number; y: number; tileWidth: number; tileHeight: number; downsample?: number },
+  ): Promise<void> {
+    const projectRoot = resolveProjectRoot();
+    const extractScript = path.join(
+      this.configService.get<string>("PYTHON_SCRIPTS_ROOT") ??
+        path.join(projectRoot, "assets", "models"),
+      "extract_tile.py",
+    );
+
+    const pythonBin =
+      this.configService.get<string>("PYTHON_BIN") ??
+      path.join(projectRoot, "assets", "models", "venv-LMN-1.0", "Scripts", "python.exe");
+
+    return new Promise<void>((resolve, reject) => {
+      const proc = spawn(pythonBin, [extractScript, slidePath], {
+        stdio: ["pipe", "pipe", "pipe"],
+        windowsHide: true,
+      });
+
+      const input = JSON.stringify({
+        level: opts.level,
+        x: opts.x,
+        y: opts.y,
+        tileWidth: opts.tileWidth,
+        tileHeight: opts.tileHeight,
+        downsample: opts.downsample ?? 0,
+      });
+
+      let stdout = "";
+      let stderr = "";
+
+      proc.stdout.on("data", (chunk: Buffer) => {
+        stdout += chunk.toString("utf-8");
+      });
+
+      proc.stderr.on("data", (chunk: Buffer) => {
+        stderr += chunk.toString("utf-8");
+      });
+
+      proc.on("error", (error) => {
+        this.logger.error(`[tile] failed to spawn extract_tile.py`, error.message);
+        if (!response.writableEnded) {
+          response.status(500).json({ error: "tile extraction failed" });
+        }
+        reject(error);
+      });
+
+      proc.on("close", (code) => {
+        if (code !== 0 || stderr) {
+          this.logger.error(`[tile] extract_tile.py exited code=${code} stderr=${stderr}`);
+          if (!response.writableEnded) {
+            response.status(500).json({ error: "tile extraction failed" });
+          }
+          reject(new Error(stderr || `exit code ${code}`));
+          return;
+        }
+
+        try {
+          const result = JSON.parse(stdout.trim());
+          if (result.ok) {
+            const tileBuf = Buffer.from(result.tile, "base64");
+            response.setHeader("Content-Type", "image/png");
+            response.setHeader("Cache-Control", "public, max-age=86400");
+            response.send(tileBuf);
+            resolve();
+          } else {
+            this.logger.error(`[tile] extract_tile.py error: ${result.error}`);
+            if (!response.writableEnded) {
+              response.status(500).json({ error: result.error ?? "tile extraction failed" });
+            }
+            reject(new Error(result.error));
+          }
+        } catch {
+          this.logger.error(`[tile] failed to parse extract_tile.py output: ${stdout.slice(0, 200)}`);
+          if (!response.writableEnded) {
+            response.status(500).json({ error: "tile extraction failed" });
+          }
+          reject(new Error("invalid tile response"));
+        }
+      });
+
+      proc.stdin.write(input);
+      proc.stdin.end();
+    });
+  }
+
+  async slideInfo(slidePath: string): Promise<{
+    width: number;
+    height: number;
+    tileWidth: number;
+    tileHeight: number;
+    levels: number;
+    levelDimensions: Array<{ width: number; height: number }>;
+    levelDownsamples: number[];
+  }> {
+    const projectRoot = resolveProjectRoot();
+    const pythonBin =
+      this.configService.get<string>("PYTHON_BIN") ??
+      path.join(projectRoot, "assets", "models", "venv-LMN-1.0", "Scripts", "python.exe");
+
+    // Resolve the OpenSlide bin directory for DLL loading
+    const openslideBin = path.join(projectRoot, "assets", "openslide", "bin");
+
+    const code = `
+import json, sys, os
+os.environ["PATH"] = ${JSON.stringify(openslideBin)} + os.pathsep + os.environ.get("PATH", "")
+if hasattr(os, "add_dll_directory"):
+    os.add_dll_directory(${JSON.stringify(openslideBin)})
+import openslide
+slide = openslide.OpenSlide(sys.argv[1])
+dims = slide.level_dimensions
+downs = slide.level_downsamples
+info = {
+    "width": slide.dimensions[0],
+    "height": slide.dimensions[1],
+    "tileWidth": int(slide.properties.get("openslide.level[0].tile-width", 256)),
+    "tileHeight": int(slide.properties.get("openslide.level[0].tile-height", 256)),
+    "levels": slide.level_count,
+    "levelDimensions": [{"width": w, "height": h} for w, h in dims],
+    "levelDownsamples": [float(d) for d in downs],
+}
+slide.close()
+print(json.dumps(info))
+`;
+
+    return new Promise((resolve, reject) => {
+      const proc = spawn(pythonBin, ["-c", code, slidePath], {
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+      });
+
+      let stdout = "";
+      let stderr = "";
+
+      proc.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString("utf-8"); });
+      proc.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString("utf-8"); });
+
+      proc.on("close", (code) => {
+        if (code !== 0) {
+          this.logger.error(`[slideInfo] python exited code=${code} stderr=${stderr}`);
+          reject(new Error(stderr || `exit code ${code}`));
+          return;
+        }
+        try {
+          resolve(JSON.parse(stdout.trim()));
+        } catch (err) {
+          reject(new Error(`failed to parse slide info: ${stdout.slice(0, 200)}`));
+        }
+      });
+
+      proc.on("error", (error) => {
+        reject(error);
+      });
+    });
+  }
+
+  // ── IIIF Image API 2.0 ───────────────────────────────────────────
+
+  async iiifInfo(
+    slidePath: string,
+    uploadId: string,
+    _request: Request,
+  ): Promise<Record<string, unknown>> {
+    const raw = await this.slideInfo(slidePath);
+    const level0 = raw.levelDimensions[0]!;
+
+    // Build scale factors from level downsamples (deduplicated, rounded)
+    const scaleFactors: number[] = [];
+    for (const ds of raw.levelDownsamples) {
+      const s = Math.round(ds);
+      if (s >= 1 && !scaleFactors.includes(s)) {
+        scaleFactors.push(s);
+      }
+    }
+    if (scaleFactors.length === 0 || scaleFactors[0] !== 1) {
+      scaleFactors.unshift(1);
+    }
+
+    return {
+      "@context": "http://iiif.io/api/image/2/context.json",
+      "@id": `/api/uploads/${uploadId}/iiif`,
+      protocol: "http://iiif.io/api/image",
+      width: level0.width,
+      height: level0.height,
+      tiles: [
+        {
+          width: raw.tileWidth,
+          scaleFactors:
+            scaleFactors.length > 0 ? scaleFactors : [1, 2, 4, 8, 16, 32],
+        },
+      ],
+      profile: ["http://iiif.io/api/image/2/level2.json"],
+    };
+  }
+
+  async extractIiiifTile(
+    response: Response,
+    slidePath: string,
+    region: string,
+    size: string,
+    _rotation: string,
+  ): Promise<void> {
+    const regionParts = region.split(",").map(Number);
+    if (regionParts.length !== 4 || regionParts.some(isNaN)) {
+      response.status(400).json({ error: "invalid region: expected x,y,w,h" });
+      return;
+    }
+    const [rx, ry, rw, rh] = regionParts as [
+      number,
+      number,
+      number,
+      number,
+    ];
+
+    let targetW = rw;
+    let targetH = rh;
+    if (size !== "full") {
+      const sizeParts = size.split(",");
+      const sw = sizeParts[0] !== "" ? Number(sizeParts[0]) : NaN;
+      const sh = sizeParts[1] !== undefined && sizeParts[1] !== "" ? Number(sizeParts[1]) : NaN;
+      if (!isNaN(sw) && !isNaN(sh)) {
+        // "w,h" — exact dimensions
+        targetW = sw;
+        targetH = sh;
+      } else if (!isNaN(sw)) {
+        // "w," — width given, height proportional
+        targetW = sw;
+        targetH = Math.round(rh * (sw / rw));
+      } else if (!isNaN(sh)) {
+        // ",h" — height given, width proportional
+        targetH = sh;
+        targetW = Math.round(rw * (sh / rh));
+      }
+    }
+
+    // Compute downsample ratio for proper pyramid level selection.
+    // e.g., region=0,0,1024,1024 size=256, → downsample = 1024/256 = 4.0
+    const downsample = targetW > 0 ? rw / targetW : 1;
+
+    // Pass REGION dimensions (level-0 pixel coords), not output dimensions.
+    // The Python script reads from level 0 and resizes using the downsample.
+    return this.extractTile(response, slidePath, {
+      level: 0,
+      x: rx,
+      y: ry,
+      tileWidth: rw,
+      tileHeight: rh,
+      downsample,
+    });
+  }
+
   async complete(uploadId: string, owner: string, expectedSha256?: string) {
     const metadata = await this.readMetadata(uploadId, owner);
     if (metadata.uploadedChunks.length !== metadata.totalChunks) {
       throw new BadRequestException("upload is incomplete");
     }
+    // Idempotent: if already completed and file exists, return early
     const finalDir = path.join(this.uploadDir(uploadId), "input");
+    const finalPath = path.join(finalDir, metadata.originalFileName);
+    if (metadata.status === "completed" && metadata.storagePath) {
+      try {
+        await fs.access(metadata.storagePath);
+        this.logger.log(`[upload] already completed id=${uploadId}`);
+        return metadata;
+      } catch { /* file missing — re-assemble below */ }
+    }
     const temporary = path.join(this.uploadDir(uploadId), "assembled.tmp");
     await fs.mkdir(finalDir, { recursive: true });
     const output = createWriteStream(temporary, { flags: "wx" });

@@ -62,4 +62,56 @@ export const registerUploadHandlers = (context: IpcContext) => {
     async (payload: { uploadId: string }) =>
       store.heatmapDataUrl(ownerOf(context), payload.uploadId),
   );
+
+  registerRaw(
+    "uploadSlidePreview",
+    { requireAuth: true },
+    async (payload: { uploadId: string }) =>
+      store.slidePreviewDataUrl(ownerOf(context), payload.uploadId),
+  );
+
+  registerRaw(
+    "uploadGetTile",
+    { requireAuth: true },
+    async (payload: {
+      uploadId: string;
+      level: number;
+      x: number;
+      y: number;
+      tileWidth?: number;
+      tileHeight?: number;
+    }) => {
+      const owner = ownerOf(context);
+      const slidePath = await store.slidePathByUploadId(owner, payload.uploadId);
+      const result = await context.workerManager.request(
+        {
+          slidePath,
+          level: payload.level,
+          x: payload.x,
+          y: payload.y,
+          tileWidth: payload.tileWidth ?? 256,
+          tileHeight: payload.tileHeight ?? 256,
+        },
+        undefined,
+        "extract-tile",
+      );
+      // result is the base64-encoded PNG tile
+      return `data:image/png;base64,${result}`;
+    },
+  );
+
+  registerRaw(
+    "uploadSlideInfo",
+    { requireAuth: true },
+    async (payload: { uploadId: string }) => {
+      const owner = ownerOf(context);
+      const slidePath = await store.slidePathByUploadId(owner, payload.uploadId);
+      const result = await context.workerManager.request(
+        { slidePath },
+        undefined,
+        "slide-info",
+      );
+      return JSON.parse(result);
+    },
+  );
 };

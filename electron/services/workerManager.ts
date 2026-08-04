@@ -247,6 +247,7 @@ export const createWorkerManager = ({
   const request = async (
     payload: Record<string, string | boolean | number>,
     onProgress?: (progress: { pct: number; step: string }) => void,
+    cmd = "predict",
   ) => {
     await waitForWorkerReady();
     const proc = workerProcess;
@@ -254,7 +255,7 @@ export const createWorkerManager = ({
       throw new Error("worker not running");
     }
     const id = String(++workerRequestSeq);
-    const message = JSON.stringify({ id, cmd: "predict", ...payload });
+    const message = JSON.stringify({ id, cmd, ...payload });
     return await new Promise<string>((resolve, reject) => {
       workerPending.set(id, { resolve, reject, onProgress });
       proc.stdin.write(message + "\n");

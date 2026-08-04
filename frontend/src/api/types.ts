@@ -81,4 +81,5 @@ export type ApiType = {
   uploadChunk(uploadId: string, index: number, chunk: Blob): Promise<void>;
   uploadComplete(uploadId: string): Promise<void>;
   heatmapSource(uploadId: string): Promise<string | null>;
+  slidePreviewSource(uploadId: string): Promise<string | null>;
 };

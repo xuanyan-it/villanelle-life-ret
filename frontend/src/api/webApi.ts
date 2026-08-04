@@ -372,4 +372,6 @@ export const webApi: ApiType = {
   },
   heatmapSource: async (uploadId: string) =>
     `/api/uploads/${encodeURIComponent(uploadId)}/heatmap`,
+  slidePreviewSource: async (uploadId: string) =>
+    `/api/uploads/${encodeURIComponent(uploadId)}/slide-preview`,
 };

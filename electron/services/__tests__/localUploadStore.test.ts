@@ -36,8 +36,12 @@ describe("local upload store", () => {
     const outputDir = path.join(root, upload.uploadId, "output");
     await fs.mkdir(outputDir, { recursive: true });
     await fs.writeFile(path.join(outputDir, "heatmap.png"), Buffer.from("png"));
+    await fs.writeFile(path.join(outputDir, "slide_preview.png"), Buffer.from("svs"));
     await expect(
       store.heatmapDataUrl("tester", upload.uploadId),
     ).resolves.toBe("data:image/png;base64,cG5n");
+    await expect(
+      store.slidePreviewDataUrl("tester", upload.uploadId),
+    ).resolves.toBe("data:image/png;base64,c3Zz");
   });
 });

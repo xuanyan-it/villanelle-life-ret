@@ -206,11 +206,34 @@ export const createLocalUploadStore = (root: string) => {
       return result;
     },
 
+    /** Get the slide file path from uploadId alone (reads metadata for fileName). */
+    async slidePathByUploadId(owner: string, uploadId: string): Promise<string> {
+      const metadata = await readMetadata(uploadId, owner);
+      if (metadata.status !== "completed") {
+        throw new Error("upload not completed");
+      }
+      const result = path.join(uploadDir(uploadId), "input", metadata.originalFileName);
+      await fs.access(result);
+      return result;
+    },
+
     async heatmapDataUrl(owner: string, uploadId: string) {
       await readMetadata(uploadId, owner);
       try {
         const content = await fs.readFile(
           path.join(uploadDir(uploadId), "output", "heatmap.png"),
+        );
+        return `data:image/png;base64,${content.toString("base64")}`;
+      } catch {
+        return null;
+      }
+    },
+
+    async slidePreviewDataUrl(owner: string, uploadId: string) {
+      await readMetadata(uploadId, owner);
+      try {
+        const content = await fs.readFile(
+          path.join(uploadDir(uploadId), "output", "slide_preview.png"),
         );
         return `data:image/png;base64,${content.toString("base64")}`;
       } catch {

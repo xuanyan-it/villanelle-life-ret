@@ -35,12 +35,19 @@ export const resolveRuntimePaths = (nodeEnv?: string): RuntimePaths => {
   const env = parseElectronEnv(process.env);
   const isPackaged = app.isPackaged;
   const envLabel: RuntimePaths["envLabel"] = isPackaged ? "prod" : "dev";
+
+  // In packaged (portable) mode the .exe self-extracts to a temp directory,
+  // but the Python runtime & models live *outside* the package — on the USB
+  // drive next to the .exe.  PORTABLE_EXECUTABLE_DIR is set by electron-builder
+  // to the folder containing the original .exe.
   const rootDir = isPackaged
     ? env.PORTABLE_EXECUTABLE_DIR || path.dirname(app.getPath("exe"))
     : resolveDevelopmentRoot();
-  const resourceRoot = isPackaged ? process.resourcesPath : rootDir;
+
+  // MODEL_DIR env var allows explicit override; otherwise look for
+  // assets/models/ next to the .exe (the USB drive root).
   const modelDir =
-    env.MODEL_DIR || path.join(resourceRoot, "assets", "models");
+    env.MODEL_DIR || path.join(rootDir, "assets", "models");
 
   const bundledPython =
     process.platform === "win32"

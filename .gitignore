@@ -182,3 +182,4 @@ assets/openslide
 # OpenSlide DLLs are tracked for USB offline deployment
 # (downloaded manually: https://github.com/openslide/openslide-bin/releases)
 .vscode/
+svs-master/*

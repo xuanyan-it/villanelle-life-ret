@@ -31,13 +31,12 @@ SLIDE_DIR = os.environ.get("CLAM_SLIDE_DIR", str(_DATA_ROOT / "slides"))
 MODEL_PATH = os.environ.get("CLAM_MODEL_CKPT", str(_PROJ / "2class.pt"))
 OUTPUT_ROOT = os.environ.get("CLAM_OUTPUT_DIR", str(_DATA_ROOT / "output"))
 PRESET = os.environ.get("CLAM_PRESET", str(_CLAM_DIR / "presets" / "bwh_biopsy.csv"))
-TEMPLATE_CONFIG = os.environ.get("CLAM_HEATMAP_TEMPLATE", str(_CLAM_DIR / "heatmaps" / "configs" / "heatmap_config_template.yaml"))
+TEMPLATE_CONFIG = os.environ.get("CLAM_HEATMAP_TEMPLATE", str(_CLAM_DIR / "heatmaps" / "configs" / "config_template.yaml"))
 BATCH_SIZE = 256
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 CLASS_MAP = {0: 'N', 1: 'R', 2: 'B'}
 FEAT_SUBDIR = "tumor_subtyping_resnet_features"
-
-TEMPLATE_CONFIG = r"D:\CLAM\CLAM-master\heatmaps\configs\heatmap_config_template.yaml"
+SLIDE_EXT = ".svs"
 # ====================================================
 
 PROJECT_ROOT = str(_CLAM_DIR)
@@ -95,6 +94,7 @@ def generate_heatmap_config_from_template(slide_path, model_path, feat_dir, save
     config['data_arguments']['slide_ext'] = SLIDE_EXT
     config['data_arguments']['preset'] = PRESET
     config['data_arguments']['process_list'] = process_list_filename  # 只写文件名，不包含路径
+    config['data_arguments']['label_dict'] = {label: index for index, label in CLASS_MAP.items()}
 
     config['model_arguments']['ckpt_path'] = model_path
     config['model_arguments']['model_type'] = 'clam_mb'
