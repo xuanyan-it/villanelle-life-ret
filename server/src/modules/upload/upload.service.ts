@@ -3,7 +3,8 @@ import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import readline from "node:readline";
 
 import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -42,6 +43,14 @@ type UploadMetadata = {
 export class UploadService {
   private readonly logger = createSanitizedLogger(UploadService.name);
   private readonly root: string;
+
+  // ── Persistent tile worker pool ────────────────────────────────
+  // Keeps one Python process per slide path alive to avoid ~300ms
+  // spawn overhead on every tile request.
+  private readonly tileWorkers = new Map<
+    string,
+    { proc: ChildProcessWithoutNullStreams; rl: readline.Interface; busy: boolean }
+  >();
 
   constructor(@Inject(ConfigService) private readonly configService: ConfigService) {
     const projectRoot = resolveProjectRoot();
@@ -196,7 +205,7 @@ export class UploadService {
   async extractTile(
     response: Response,
     slidePath: string,
-    opts: { level: number; x: number; y: number; tileWidth: number; tileHeight: number; downsample?: number },
+    opts: { level: number; x: number; y: number; tileWidth: number; tileHeight: number; downsample?: number; full?: boolean; targetW?: number },
   ): Promise<void> {
     const projectRoot = resolveProjectRoot();
     const extractScript = path.join(
@@ -222,6 +231,8 @@ export class UploadService {
         tileWidth: opts.tileWidth,
         tileHeight: opts.tileHeight,
         downsample: opts.downsample ?? 0,
+        full: opts.full ?? false,
+        targetW: opts.targetW ?? 0,
       });
 
       let stdout = "";
@@ -362,17 +373,13 @@ print(json.dumps(info))
     const raw = await this.slideInfo(slidePath);
     const level0 = raw.levelDimensions[0]!;
 
-    // Build scale factors from level downsamples (deduplicated, rounded)
-    const scaleFactors: number[] = [];
-    for (const ds of raw.levelDownsamples) {
-      const s = Math.round(ds);
-      if (s >= 1 && !scaleFactors.includes(s)) {
-        scaleFactors.push(s);
-      }
-    }
-    if (scaleFactors.length === 0 || scaleFactors[0] !== 1) {
-      scaleFactors.unshift(1);
-    }
+    // Fixed scale factors matching svs-master exactly: [1, 4, 16, 64, 256, 1024]
+    // Filter to only those that fit within the slide dimensions.
+    const allFactors = [1, 4, 16, 64, 256, 1024];
+    const maxDim = Math.max(level0.width, level0.height);
+    const tileSize = raw.tileWidth || 256;
+    const scaleFactors = allFactors.filter((s) => s * tileSize <= maxDim * 1.1);
+    if (scaleFactors.length === 0) scaleFactors.push(1);
 
     return {
       "@context": "http://iiif.io/api/image/2/context.json",
@@ -383,8 +390,7 @@ print(json.dumps(info))
       tiles: [
         {
           width: raw.tileWidth,
-          scaleFactors:
-            scaleFactors.length > 0 ? scaleFactors : [1, 2, 4, 8, 16, 32],
+          scaleFactors,
         },
       ],
       profile: ["http://iiif.io/api/image/2/level2.json"],
@@ -398,6 +404,14 @@ print(json.dumps(info))
     size: string,
     _rotation: string,
   ): Promise<void> {
+    // Handle IIIF "full" (thumbnail) request — read the entire slide
+    if (region === "full") {
+      return this.extractTile(response, slidePath, {
+        level: 0, x: 0, y: 0, tileWidth: 0, tileHeight: 0, downsample: 0, full: true,
+        targetW: size !== "full" ? parseInt(size.split(",")[0] || "256", 10) : 256,
+      } as any);
+    }
+
     const regionParts = region.split(",").map(Number);
     if (regionParts.length !== 4 || regionParts.some(isNaN)) {
       response.status(400).json({ error: "invalid region: expected x,y,w,h" });
@@ -417,26 +431,27 @@ print(json.dumps(info))
       const sw = sizeParts[0] !== "" ? Number(sizeParts[0]) : NaN;
       const sh = sizeParts[1] !== undefined && sizeParts[1] !== "" ? Number(sizeParts[1]) : NaN;
       if (!isNaN(sw) && !isNaN(sh)) {
-        // "w,h" — exact dimensions
         targetW = sw;
         targetH = sh;
       } else if (!isNaN(sw)) {
-        // "w," — width given, height proportional
         targetW = sw;
         targetH = Math.round(rh * (sw / rw));
       } else if (!isNaN(sh)) {
-        // ",h" — height given, width proportional
         targetH = sh;
         targetW = Math.round(rw * (sh / rh));
       }
     }
 
-    // Compute downsample ratio for proper pyramid level selection.
-    // e.g., region=0,0,1024,1024 size=256, → downsample = 1024/256 = 4.0
     const downsample = targetW > 0 ? rw / targetW : 1;
 
-    // Pass REGION dimensions (level-0 pixel coords), not output dimensions.
-    // The Python script reads from level 0 and resizes using the downsample.
+    return this.extractTile(response, slidePath, {
+      level: 0,
+      x: rx,
+      y: ry,
+      tileWidth: rw,
+      tileHeight: rh,
+      downsample,
+    });
     return this.extractTile(response, slidePath, {
       level: 0,
       x: rx,

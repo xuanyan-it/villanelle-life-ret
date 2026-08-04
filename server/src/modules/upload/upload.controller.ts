@@ -133,6 +133,21 @@ export class UploadController {
     return this.uploads.extractIiiifTile(response, slidePath, region, size, rotation);
   }
 
+  // IIIF thumbnail: /full/{width},{height}/{rotation}/default.jpg
+  @Get("/:uploadId/iiif/full/:size/:rotation/default.jpg")
+  async iiifFull(
+    @Req() request: Request,
+    @Res() response: Response,
+    @Param("uploadId") uploadId: string,
+    @Param("size") size: string,
+  ) {
+    const slidePath = await this.uploads.slideFilePath(uploadId, ownerOf(request));
+    if (!slidePath) {
+      return response.status(404).json({ error: "slide file not found" });
+    }
+    return this.uploads.extractIiiifTile(response, slidePath, "full", size, "0");
+  }
+
   @Put("/:uploadId/chunks/:index")
   writeChunk(
     @Req() request: Request,

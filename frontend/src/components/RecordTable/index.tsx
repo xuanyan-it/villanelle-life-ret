@@ -18,6 +18,8 @@ import {
   Row,
   Select,
   Space,
+  Spin,
+  Tabs,
   Tag,
   // Tooltip,
   Typography,
@@ -27,7 +29,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
 import { api } from "../../api";
+import OpenSeadragon from "openseadragon";
 import { isElectronRuntime as detectElectronRuntime } from "../../platform/runtime";
+import { SvsViewer } from "../SvsViewer";
 import type { AppDispatch, RootState } from "../../store";
 import { fetchUserListAsync, getUserList } from "../../store/admin";
 import { pushNotification } from "../../store/notification";
@@ -197,6 +201,68 @@ const HeatmapPreview = ({
   );
 };
 
+/** OSD viewer for heatmap images — provides zoom/pan for large heatmaps. */
+const HeatmapOsdViewer = ({ src, loading, regenerating, onRegenerate }: {
+  src: string | null;
+  loading: boolean;
+  regenerating?: boolean;
+  onRegenerate?: () => void;
+}) => {
+  const { t } = useTranslation();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const viewerRef = useRef<OpenSeadragon.Viewer | null>(null);
+
+  useEffect(() => {
+    if (!src || !containerRef.current) return;
+    if (viewerRef.current) {
+      viewerRef.current.destroy();
+      viewerRef.current = null;
+    }
+    const viewer = OpenSeadragon({
+      element: containerRef.current,
+      prefixUrl: "/openseadragon/images/",
+      tileSources: { type: "image" as any, url: src },
+      visibilityRatio: 1,
+      minZoomImageRatio: 1,
+      showNavigationControl: true,
+      showNavigator: true,
+      navigatorPosition: "BOTTOM_RIGHT",
+      navigatorSizeRatio: 0.15,
+      immediateRender: false,
+      constrainDuringPan: true,
+    });
+    viewerRef.current = viewer;
+    return () => {
+      viewer.destroy();
+      viewerRef.current = null;
+    };
+  }, [src]);
+
+  if (loading) {
+    return (
+      <Flex vertical align="center" justify="center" style={{ height: "100%", background: "#111" }} gap={12}>
+        <Spin size="large" />
+        <Typography.Text style={{ color: "#ccc" }}>正在加载热力图…</Typography.Text>
+      </Flex>
+    );
+  }
+
+  if (!src) {
+    return (
+      <Flex vertical align="center" justify="center" style={{ height: "100%", background: "#111" }} gap={12}>
+        <Typography.Text style={{ color: "#ccc" }}>{t("recordTable_geneInfo_heatmapUnavailable")}</Typography.Text>
+        {onRegenerate && (
+          <Button type="primary" loading={regenerating} onClick={onRegenerate}>
+            生成热力图
+          </Button>
+        )}
+      </Flex>
+    );
+  }
+
+  return <div ref={containerRef} style={{ width: "100%", height: "100%", background: "#111" }} />;
+};
+
 const RecordTable = () => {
   const ref = useRef<ActionType>();
   const pageChangeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -277,6 +343,11 @@ const RecordTable = () => {
     useState<DescriptionsProps["items"]>();
   const [reviewDescriptionItems, setReviewDescriptionItems] =
     useState<DescriptionsProps["items"]>();
+  const [detailUploadId, setDetailUploadId] = useState<string>("");
+  const [detailRecord, setDetailRecord] = useState<any>(null);
+  const [regeneratingHeatmap, setRegeneratingHeatmap] = useState(false);
+  const [heatmapSrc, setHeatmapSrc] = useState<string | null>(null);
+  const [heatmapChecking, setHeatmapChecking] = useState(false);
   const showDeletedOnly = useSelector((state: RootState) =>
     getDeletedOnly(state),
   );
@@ -287,6 +358,21 @@ const RecordTable = () => {
   useEffect(() => {
     setSearchInput(searchKeyword);
   }, [searchKeyword]);
+
+  // Check heatmap status when detail modal opens
+  useEffect(() => {
+    if (!detailUploadId) {
+      setHeatmapSrc(null);
+      return;
+    }
+    let active = true;
+    setHeatmapChecking(true);
+    api.heatmapSource(detailUploadId)
+      .then((src) => { if (active) setHeatmapSrc(src); })
+      .catch(() => { if (active) setHeatmapSrc(null); })
+      .finally(() => { if (active) setHeatmapChecking(false); });
+    return () => { active = false; };
+  }, [detailUploadId]);
   const handleSearch = useCallback(
     (value: string) => {
       const nextKeyword = value.trim();
@@ -385,16 +471,6 @@ const RecordTable = () => {
           />
         ),
       },
-      {
-        key: "18-heatmap",
-        label: t("recordTable_geneInfo_heatmap"),
-        children: (
-          <HeatmapPreview
-            uploadId={record.uploadId}
-            enabled={record.generateHeatmap}
-          />
-        ),
-      },
     ];
     const reviewItems: DescriptionsProps["items"] = [
       {
@@ -422,16 +498,46 @@ const RecordTable = () => {
       },
     ];
     setDescriptionTitle(record.slideFileName.concat(" - ", record.hospitalName));
+    setDetailUploadId(record.uploadId);
+    setDetailRecord(record);
     setSampleSourceDescriptionItems(withDelete(sampleSourceItems));
     setGeneInfoDescriptionItems(withDelete(geneInfoItems));
     setReviewDescriptionItems(withDelete(reviewItems));
   };
   const handleCloseSampleDetail = () => {
     setDescriptionOpen(false);
+    setDetailUploadId("");
+    setDetailRecord(null);
     setSampleSourceDescriptionItems({} as DescriptionsProps["items"]);
     setGeneInfoDescriptionItems({} as DescriptionsProps["items"]);
     setReviewDescriptionItems({} as DescriptionsProps["items"]);
   };
+
+  const handleRegenerateHeatmap = async (record: any) => {
+    setRegeneratingHeatmap(true);
+    setHeatmapSrc(null);
+    try {
+      await api.createSampleRecords({
+        ...record,
+        generateHeatmap: true,
+        evaluationAsync: true,
+      } as any);
+      dispatch(pushNotification({
+        type: "success",
+        message: "热力图生成已提交",
+        description: "请等待评估完成后刷新查看",
+      }));
+    } catch {
+      dispatch(pushNotification({
+        type: "error",
+        message: "热力图生成失败",
+        description: "请稍后重试",
+      }));
+    } finally {
+      setRegeneratingHeatmap(false);
+    }
+  };
+
   const handleToggleDeletedView = () => {
     const next = !showDeletedOnly;
     dispatch(setDeletedOnly(next));
@@ -985,41 +1091,65 @@ const RecordTable = () => {
       <DraggableModal
         title={descriptionTitle}
         centered
-        width={"80%"}
+        width={"92%"}
         open={descriptionOpen}
         onCancel={handleCloseSampleDetail}
         footer={null}
         destroyOnHidden
         className={descriptionDeleted ? "description-deleted" : ""}
+        styles={{ body: { maxHeight: "calc(100vh - 160px)", overflowY: "auto", padding: 16 } }}
       >
-        <Flex
-          vertical
-          style={{
-            maxHeight: "600px",
-            overflowY: "auto",
-            marginBottom: "20px",
-          }}
-        >
-          <Divider orientation="left">{t("recordTable_sampleSource")}</Divider>
-          <Descriptions
-            items={sampleSourceDescriptionItems}
-            bordered
-            layout="vertical"
-          />
-          <Divider orientation="left">{t("recordTable_geneInfo")}</Divider>
-          <Descriptions
-            items={geneInfoDescriptionItems}
-            bordered
-            layout="vertical"
-            column={{ xs: 1, sm: 1, md: 2 }}
-          />
-          <Divider orientation="left">{t("recordTable_review")}</Divider>
-          <Descriptions
-            items={reviewDescriptionItems}
-            bordered
-            layout="vertical"
-          />
-        </Flex>
+        <Row gutter={16}>
+          <Col xs={24} lg={10}>
+            <Flex vertical gap={8}>
+              <Divider orientation="left" style={{ margin: "4px 0" }}>{t("recordTable_sampleSource")}</Divider>
+              <Descriptions items={sampleSourceDescriptionItems} bordered layout="vertical" size="small" />
+              <Divider orientation="left" style={{ margin: "4px 0" }}>{t("recordTable_geneInfo")}</Divider>
+              <Descriptions items={geneInfoDescriptionItems} bordered layout="vertical" size="small" column={{ xs: 1, sm: 2 }} />
+              <Divider orientation="left" style={{ margin: "4px 0" }}>{t("recordTable_review")}</Divider>
+              <Descriptions items={reviewDescriptionItems} bordered layout="vertical" size="small" />
+            </Flex>
+          </Col>
+          <Col xs={24} lg={14}>
+            {detailUploadId ? (
+              <Tabs
+                defaultActiveKey="svs"
+                size="small"
+                style={{ height: "100%" }}
+                tabBarStyle={{ margin: 0, padding: "0 12px", background: "#fafafa", borderRadius: "6px 6px 0 0", border: "1px solid #d9d9d9", borderBottom: 0 }}
+                items={[
+                  {
+                    key: "svs",
+                    label: "切片预览",
+                    children: (
+                      <div style={{ height: "calc(100vh - 240px)", minHeight: 480, borderRadius: "0 0 6px 6px", overflow: "hidden", border: "1px solid #d9d9d9", borderTop: 0 }}>
+                        <SvsViewer uploadId={detailUploadId} />
+                      </div>
+                    ),
+                  },
+                  {
+                    key: "heatmap",
+                    label: "热力图",
+                    children: (
+                      <div style={{ height: "calc(100vh - 240px)", minHeight: 480, borderRadius: "0 0 6px 6px", overflow: "hidden", border: "1px solid #d9d9d9", borderTop: 0 }}>
+                        <HeatmapOsdViewer
+                          src={heatmapSrc}
+                          loading={heatmapChecking || regeneratingHeatmap}
+                          regenerating={regeneratingHeatmap}
+                          onRegenerate={() => handleRegenerateHeatmap(detailRecord)}
+                        />
+                      </div>
+                    ),
+                  },
+                ]}
+              />
+            ) : (
+              <Flex align="center" justify="center" style={{ height: 200 }}>
+                <Typography.Text type="secondary">切片预览加载中…</Typography.Text>
+              </Flex>
+            )}
+          </Col>
+        </Row>
       </DraggableModal>
       {/* delete confirmation modal */}
       <DraggableModal

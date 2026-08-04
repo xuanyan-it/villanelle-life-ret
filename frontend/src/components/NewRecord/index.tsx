@@ -7,11 +7,13 @@ import type {
   MenuProps} from "antd";
 import {
   Button,
+  Col,
   Descriptions,
   Dropdown,
   Flex,
   Form,
   Progress,
+  Row,
   Steps,
   Tooltip,
   Typography,
@@ -107,11 +109,11 @@ const NewRecord: React.FC = () => {
   // tab and form
   const [sampleSourceFormRef] = Form.useForm();
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
-  const minModalWidth = Math.round(viewportWidth * 0.6);
-  const maxModalWidth = viewportWidth;
+  const minModalWidth = Math.round(viewportWidth * 0.75);
+  const maxModalWidth = Math.round(viewportWidth * 0.95);
   const modalWidth = Math.min(
     maxModalWidth,
-    Math.max(Math.round(viewportWidth * 0.7), minModalWidth)
+    Math.max(Math.round(viewportWidth * 0.85), minModalWidth)
   );
   // handler
   const resetAllStates = (options?: { resetForms?: boolean }) => {
@@ -430,17 +432,33 @@ const NewRecord: React.FC = () => {
         style={{ margin: "12px 0 8px" }}
       />
       {currentStep === 0 ? newRecordForm : (
-        <Flex vertical gap={16} style={{ maxHeight: "calc(100vh - 240px)", overflowY: "auto", padding: "8px 4px" }}>
-          <Descriptions bordered size="small" column={2} items={previewItems} />
+        <Flex vertical gap={16} style={{ padding: "8px 4px", minHeight: 500 }}>
           {selectedFile ? (
-            <div style={{ height: 360, borderRadius: 6, overflow: "hidden", border: "1px solid #d9d9d9" }}>
-              <SvsViewer uploadId={reviewUploadId} />
-            </div>
-          ) : null}
-          <Flex justify="space-between">
-            <Button onClick={() => setCurrentStep(0)}>{t("newRecord_previous")}</Button>
-            <Button type="primary" onClick={() => setSubmitOpen(true)}>{t("newRecord_submit")}</Button>
-          </Flex>
+            <Row gutter={16} style={{ minHeight: 520 }}>
+              <Col xs={24} md={10} lg={9}>
+                <Flex vertical gap={12} style={{ height: "100%" }}>
+                  <Descriptions bordered size="small" column={1} items={previewItems} />
+                  <Flex justify="space-between" style={{ marginTop: "auto" }}>
+                    <Button onClick={() => setCurrentStep(0)}>{t("newRecord_previous")}</Button>
+                    <Button type="primary" onClick={() => setSubmitOpen(true)}>{t("newRecord_submit")}</Button>
+                  </Flex>
+                </Flex>
+              </Col>
+              <Col xs={24} md={14} lg={15}>
+                <div style={{ height: "100%", minHeight: 520, borderRadius: 6, overflow: "hidden", border: "1px solid #d9d9d9" }}>
+                  <SvsViewer uploadId={reviewUploadId} />
+                </div>
+              </Col>
+            </Row>
+          ) : (
+            <>
+              <Descriptions bordered size="small" column={2} items={previewItems} />
+              <Flex justify="space-between">
+                <Button onClick={() => setCurrentStep(0)}>{t("newRecord_previous")}</Button>
+                <Button type="primary" onClick={() => setSubmitOpen(true)}>{t("newRecord_submit")}</Button>
+              </Flex>
+            </>
+          )}
         </Flex>
       )}
     </>
@@ -775,7 +793,9 @@ const NewRecord: React.FC = () => {
           padding: 20,
           minWidth: minModalWidth,
           maxWidth: maxModalWidth,
+          top: 24,
         }}
+        styles={{ body: { maxHeight: "calc(100vh - 140px)", overflowY: "auto" } }}
         destroyOnHidden
         centered
         footer={null}
