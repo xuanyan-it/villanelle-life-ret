@@ -16,11 +16,6 @@ extraResources:
     to: web
     filter:
       - "**/*"
-  # NSIS standalone: everything bundled under model/
-  - from: ../assets/models
-    to: model
-  - from: ../assets/openslide
-    to: model/openslide
 win:
   icon: assets/app.ico
   signAndEditExecutable: false

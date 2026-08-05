@@ -220,7 +220,9 @@ const HeatmapOsdViewer = ({ src, loading, regenerating, onRegenerate }: {
     }
     const viewer = OpenSeadragon({
       element: containerRef.current,
-      prefixUrl: "/openseadragon/images/",
+      prefixUrl: detectElectronRuntime()
+        ? "./openseadragon/images/"
+        : "/openseadragon/images/",
       tileSources: { type: "image" as any, url: src },
       visibilityRatio: 1,
       minZoomImageRatio: 1,

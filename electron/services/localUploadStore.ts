@@ -217,6 +217,22 @@ export const createLocalUploadStore = (root: string) => {
       return result;
     },
 
+    /**
+     * Get slide path without owner verification — for internal protocol handlers.
+     * Only use in trusted, app-internal contexts (e.g. slide:// protocol).
+     */
+    async getSlidePath(uploadId: string): Promise<string> {
+      const raw = JSON.parse(
+        await fs.readFile(metadataPath(uploadId), "utf8"),
+      ) as LocalUploadMetadata;
+      if (raw.status !== "completed") {
+        throw new Error("upload not completed");
+      }
+      const result = path.join(uploadDir(uploadId), "input", raw.originalFileName);
+      await fs.access(result);
+      return result;
+    },
+
     async heatmapDataUrl(owner: string, uploadId: string) {
       await readMetadata(uploadId, owner);
       try {

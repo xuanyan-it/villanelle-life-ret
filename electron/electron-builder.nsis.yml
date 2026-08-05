@@ -9,19 +9,12 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  # Standalone installer layout (aligned with thyromet.bak reference):
+  # Standalone installer (~150 MB, Electron + frontend only).
+  # Python environment (model/) is external — deployed separately.
+  # After install + model deployment:
   #   Program Files\Ret\
-  #     Ret.exe                    ← the only visible file
-  #     db.db                      ← SQLite database (alongside exe)
+  #     Ret.exe
+  #     model\              ← Python 环境（外部部署）
   #     resources\
-  #       app.asar                 ← Electron + Node code
-  #       model\                   ← Python worker + venv + models
-  #         worker.py
-  #         venv-LMN-1.0\
-  #         *.pt
-  #         CLAM-master\
-  #         extract_tile.py
-  #       openslide\               ← OpenSlide native DLLs
-  #         bin\
-  #         lib\
-  #       web\                     ← Vite-built frontend
+  #       app.asar
+  #       web\ (frontend)

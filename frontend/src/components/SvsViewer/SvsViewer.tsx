@@ -24,6 +24,10 @@ import OpenSeadragon from "openseadragon";
 
 import styles from "./SvsViewer.module.css";
 import { isElectronRuntime } from "../../platform/runtime";
+import {
+  buildElectronTileSource,
+  type SlideInfo,
+} from "./ServerTileSource";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -112,28 +116,49 @@ export const SvsViewer = forwardRef<SvsViewerHandle, SvsViewerProps>(
 
       const init = async () => {
         try {
-          // ── Electron mode: simple image viewer via slide_preview ──
+          // ── Electron mode: IIIF deep zoom via slide:// protocol ──
           if (isElectronRuntime()) {
             const electron = (window as any).electronAPI;
             if (!electron?.call) throw new Error("Electron API not available");
-            const slideSrc: string = await electron.call("uploadSlidePreview", { uploadId });
-            if (!active || disposedRef.current) return;
-            if (!slideSrc) throw new Error("切片预览不可用");
 
+            // Slide metadata comes from the Python worker.  If the worker is
+            // not ready it will hang in waitForWorkerReady(), so bound the
+            // call with a timeout and surface a clear error.
+            const WORKER_TIMEOUT_MS = 15000;
+            const slideInfo: SlideInfo = await Promise.race([
+              electron.call("uploadSlideInfo", { uploadId }),
+              new Promise<never>((_, reject) =>
+                setTimeout(
+                  () => reject(new Error("worker 未就绪，无法读取切片信息")),
+                  WORKER_TIMEOUT_MS,
+                ),
+              ),
+            ]);
+            if (!active || disposedRef.current) return;
+            console.log("[SvsViewer] Electron slide info:", slideInfo);
+            setDimensions({ w: slideInfo.levelDimensions[0].width, h: slideInfo.levelDimensions[0].height });
+
+            // Step 2: build tile source (slide:// protocol serves tiles via IPC → worker)
+            const tileSource = buildElectronTileSource(slideInfo, uploadId);
+
+            // Step 3: create viewer (same config as web mode)
             destroyViewer();
             if (!active || disposedRef.current) return;
 
             const viewer = OpenSeadragon({
               element: containerRef.current!,
               prefixUrl,
-              tileSources: { type: "image" as any, url: slideSrc },
               visibilityRatio: 1,
               minZoomImageRatio: 1,
-              showNavigationControl: true,
+              imageLoaderLimit: 5,
+              timeout: 180 * 1000,
+              tileSources: tileSource as any,
+              crossOriginPolicy: "Anonymous",
+              immediateRender: false,
               showNavigator: true,
               navigatorPosition: "BOTTOM_RIGHT",
-              navigatorSizeRatio: 0.15,
-              immediateRender: false,
+              navigatorSizeRatio: 0.18,
+              showNavigationControl: true,
               constrainDuringPan: true,
             });
             viewerRef.current = viewer;

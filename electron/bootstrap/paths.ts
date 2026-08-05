@@ -7,7 +7,10 @@ import { parseElectronEnv } from "../config/env";
 export type RuntimePaths = {
   envLabel: "dev" | "prod";
   rootDir: string;
+  /** Directory containing worker.py / python-runtime / venv / weights. */
   modelDir: string;
+  /** Runtime data root holding logs/ and uploads/ (model/). */
+  modelRoot: string;
   pythonExePath: string;
   workerScriptPath: string;
   hasRuntimePython: boolean;
@@ -36,26 +39,38 @@ export const resolveRuntimePaths = (nodeEnv?: string): RuntimePaths => {
   const isPackaged = app.isPackaged;
   const envLabel: RuntimePaths["envLabel"] = isPackaged ? "prod" : "dev";
 
-  // In packaged mode, extraResources are placed in the resources/ directory.
-  // Portable builds also use PORTABLE_EXECUTABLE_DIR for USB drive layout.
-  const resourcesPath = isPackaged
-    ? (process.resourcesPath ?? path.join(path.dirname(app.getPath("exe")), "resources"))
-    : "";
+  // model/ is always external — next to the .exe (portable USB) or
+  // at a configured location.  It is NEVER bundled in app.asar or resources/.
   const rootDir = isPackaged
-    ? (env.PORTABLE_EXECUTABLE_DIR || resourcesPath)
+    ? (env.PORTABLE_EXECUTABLE_DIR || path.dirname(app.getPath("exe")))
     : resolveDevelopmentRoot();
 
-  // MODEL_DIR env var allows explicit override.
-  // Supports both new `model/` layout (NSIS standalone) and legacy
-  // `assets/models/` layout (portable USB / development).
-  const candidates = [
-    path.join(rootDir, "model"),
-    path.join(rootDir, "assets", "models"),
-  ];
-  const modelDir =
-    env.MODEL_DIR ||
-    candidates.find((d) => fs.existsSync(path.join(d, "worker.py"))) ||
-    candidates[0]!;
+  // Runtime data root — logs/ and uploads/ live here (model/logs, model/uploads).
+  // Only used in production/portable; dev keeps rootDir/data/uploads.
+  const modelRoot = path.join(rootDir, "model");
+
+  let modelDir: string;
+  if (isPackaged) {
+    // Production/portable layout:
+    //   model/artificial/models/  ← current portable deployment
+    //   model/                    ← previous portable deployment
+    const artificialModels = path.join(modelRoot, "artificial", "models");
+    modelDir =
+      env.MODEL_DIR ||
+      (fs.existsSync(path.join(artificialModels, "worker.py"))
+        ? artificialModels
+        : fs.existsSync(path.join(modelRoot, "worker.py"))
+          ? modelRoot
+          : artificialModels);
+  } else {
+    // Development layout (unchanged):
+    //   model/ (if present at repo root) else assets/models/
+    modelDir =
+      env.MODEL_DIR ||
+      (fs.existsSync(path.join(rootDir, "model", "worker.py"))
+        ? path.join(rootDir, "model")
+        : path.join(rootDir, "assets", "models"));
+  }
 
   const bundledPython =
     process.platform === "win32"
@@ -75,6 +90,7 @@ export const resolveRuntimePaths = (nodeEnv?: string): RuntimePaths => {
     envLabel,
     rootDir,
     modelDir,
+    modelRoot,
     pythonExePath,
     workerScriptPath,
     hasRuntimePython,

@@ -17,9 +17,9 @@
         script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval';
         worker-src 'self' blob:;
         style-src 'self' 'unsafe-inline';
-        img-src 'self' data: blob:;
+        img-src 'self' data: blob: slide:;
         font-src 'self' data:;
-        connect-src 'self' http://localhost:* ws://localhost:*;
+        connect-src 'self' http://localhost:* ws://localhost:* slide:;
         base-uri 'self';
         form-action 'self';
       "

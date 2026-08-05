@@ -2,22 +2,23 @@ extends: ./electron-builder.yml
 directories:
   output: release/portable
 win:
+  artifactName: Ret-病理辅助诊断系统.${ext}
   target:
     - target: portable
       arch:
         - x64
 portable:
-  splashImage: assets/portable-splash.bmp
-  # Portable / USB mode: Python runtime, models, and OpenSlide live as
-  # plain files next to the .exe on the USB drive (NOT inside resources/).
+  # model/ is external — Python runtime, venv, OpenSlide, and ML weights
+  # live as plain files on the USB drive next to Ret-portable.exe.
+  # Runtime data (logs/, uploads/) is also kept inside model/ so the root
+  # next to the exe only contains Ret-portable.exe and db.db.
   # The app resolves them via PORTABLE_EXECUTABLE_DIR at runtime.
-  # The extraResources from the base config are included, but at runtime
-  # the portable uses PORTABLE_EXECUTABLE_DIR first.
   #
-  # USB drive layout:
-  #   Ret\
-  #     Ret.exe
-  #     assets\
-  #       models\          ← python-runtime, venv-LMN-1.0, worker.py, *.pt
-  #       openslide\       ← OpenSlide binaries
-  unpackDirName: ret-app
+  # USB drive layout (user deploys):
+  #   Ret-portable.exe
+  #   db.db
+  #   model/
+  #     artificial/
+  #       models/      ← worker.py, venv-LMN-1.0/, python-runtime/, openslide/, *.pt
+  #     logs/          ← electron.log
+  #     uploads/       ← uploaded .svs + outputs

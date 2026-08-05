@@ -34,9 +34,25 @@ describe("resolveRuntimePaths", () => {
     const ret = resolveRuntimePaths("development");
     expect(ret.envLabel).toBe("dev");
     expect(ret.rootDir).toBe("C:\\repo");
+    // default mock: everything exists → model/ is preferred (unchanged dev logic)
+    expect(ret.modelDir).toBe("C:\\repo\\model");
+    expect(ret.modelRoot).toBe("C:\\repo\\model");
     expect(ret.pythonExePath).toMatch(/python(\.exe)?$/);
     expect(ret.workerScriptPath).toContain("worker.py");
     expect(ret.hasRuntimePython).toBe(true);
+    cwdSpy.mockRestore();
+  });
+
+  test("resolves development modelDir to assets/models when model/ is missing", () => {
+    // only the dev repo layout (assets/models/worker.py) exists
+    (fs.existsSync as any).mockImplementation((p: string) =>
+      p.includes("assets") &&
+      p.includes("models") &&
+      p.includes("worker.py"),
+    );
+    const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue("C:\\repo");
+    const ret = resolveRuntimePaths("development");
+    expect(ret.modelDir).toBe("C:\\repo\\assets\\models");
     cwdSpy.mockRestore();
   });
 
@@ -50,7 +66,28 @@ describe("resolveRuntimePaths", () => {
     const ret = resolveRuntimePaths("production");
     expect(ret.envLabel).toBe("prod");
     expect(ret.rootDir).toBe("D:\\portable");
-    expect(ret.modelDir).toBe("D:\\portable\\resources\\assets\\models");
+    // default mock: everything exists → model/artificial/models is preferred
+    expect(ret.modelDir).toBe("D:\\portable\\model\\artificial\\models");
+    expect(ret.modelRoot).toBe("D:\\portable\\model");
     expect((fs.existsSync as any).mock.calls.length).toBeGreaterThan(0);
+  });
+
+  test("resolves production modelDir to model/ when artificial/ is absent", () => {
+    (app as any).isPackaged = true;
+    process.env.PORTABLE_EXECUTABLE_DIR = "D:\\portable";
+    // previous portable layout: worker.py directly at model/
+    (fs.existsSync as any).mockImplementation((p: string) =>
+      !p.includes("artificial"),
+    );
+    const ret = resolveRuntimePaths("production");
+    expect(ret.modelDir).toBe("D:\\portable\\model");
+  });
+
+  test("defaults production modelDir to model/artificial/models when nothing found", () => {
+    (app as any).isPackaged = true;
+    process.env.PORTABLE_EXECUTABLE_DIR = "D:\\portable";
+    (fs.existsSync as any).mockImplementation(() => false);
+    const ret = resolveRuntimePaths("production");
+    expect(ret.modelDir).toBe("D:\\portable\\model\\artificial\\models");
   });
 });

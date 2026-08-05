@@ -1,5 +1,5 @@
 import type { BrowserWindow} from "electron";
-import { app, nativeImage } from "electron";
+import { app, nativeImage, protocol } from "electron";
 import fs from "fs";
 import path from "path";
 import { format } from "url";
@@ -16,6 +16,7 @@ import { createShellOutputEmitter } from "./infrastructure/shellOutput";
 import { getElectronLogger, initializeElectronLogger } from "./infrastructure/logger";
 import { createWorkerManager } from "./services/workerManager";
 import { createLocalUploadStore } from "./services/localUploadStore";
+import { registerSlideProtocolHandler } from "./services/slideProtocolHandler";
 import { createAuthSession } from "./ipc/authSession";
 import { registerIpcHandlers } from "./ipc";
 
@@ -33,7 +34,27 @@ const E2E_CDP_PORT = process.env.RET_E2E_CDP_PORT?.trim();
 
 const nowMs = () => Date.now();
 const appStartMs = nowMs();
-const logger = initializeElectronLogger({ nodeEnv: NODE_ENV });
+// In production/portable, keep runtime data inside model/ so the root next to
+// the exe only contains the exe and db.db (logs → model/logs).
+const logger = initializeElectronLogger({
+  nodeEnv: NODE_ENV,
+  logDir: NODE_ENV === "production" ? path.join("model", "logs") : undefined,
+});
+
+// Register the slide:// scheme as privileged BEFORE app ready.
+// Required for the renderer to load slide:// URLs in <img> / fetch.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "slide",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+    },
+  },
+]);
 
 let workerCommand = "";
 let workerArgs: string[] = [];
@@ -130,15 +151,19 @@ const createWindow = () => {
     envLabel,
     rootDir,
     modelDir,
+    modelRoot,
     pythonExePath,
     workerScriptPath,
     hasRuntimePython,
   } = resolveRuntimePaths(NODE_ENV);
+  // Production/portable: uploads live inside model/ (model/uploads) so the root
+  // next to the exe only contains the exe and db.db.
   const uploadRoot =
     envLabel === "dev"
       ? path.join(rootDir, "data", "uploads")
-      : path.join(path.dirname(DB_PATH), "uploads");
+      : path.join(modelRoot, "uploads");
   const localUploadStore = createLocalUploadStore(uploadRoot);
+  registerSlideProtocolHandler(localUploadStore, workerManager);
   const bundledSitePackages = path.join(
     modelDir,
     "venv-LMN-1.0",

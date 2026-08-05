@@ -94,7 +94,54 @@ export function buildCustomTileSource(
   };
 }
 
-// ── Electron IPC tile fetcher ───────────────────────────────────────
+// ── Electron slide:// protocol tile source ────────────────────────────
+
+/**
+ * Build a tile source that fetches tiles via the Electron `slide://` protocol.
+ *
+ * Aligned with the Web IIIF path (SvsViewer.tsx web branch):
+ *   - `getLevelScale` uses the real OpenSlide downsample factors instead of
+ *     OSD's default power-of-2 assumption (SVS pyramids are usually 1/4/16/64).
+ *   - `getTileUrl` converts OSD tile indices → level-0 pixel coordinates,
+ *     matching how the IIIF TileSource computes regions for read_region().
+ *
+ * The `slide://` protocol is handled by the main process, which calls the
+ * Python worker to extract tiles.  The URL format is:
+ *   slide://tile/{uploadId}/{level}/{x0}_{y0}.png?tw={tileWidth}&th={tileHeight}
+ * where {x0},{y0} are LEVEL-0 pixel coordinates (worker read_region contract).
+ */
+export function buildElectronTileSource(
+  info: SlideInfo,
+  uploadId: string,
+): Record<string, unknown> {
+  const level0 = info.levelDimensions[0]!;
+
+  const getLevelScale = (level: number): number =>
+    1 / (info.levelDownsamples[level] ?? Math.pow(2, level));
+
+  return {
+    width: level0.width,
+    height: level0.height,
+    tileWidth: info.tileWidth,
+    tileHeight: info.tileHeight,
+    tileOverlap: 0,
+    minLevel: 0,
+    maxLevel: info.levels - 1,
+    getLevelScale,
+    getTileUrl(level: number, x: number, y: number): string {
+      // OSD passes tile indices (column/row).  The worker's read_region
+      // takes level-0 pixel coords, so scale like the IIIF path does.
+      const scale = getLevelScale(level);
+      const x0 = Math.round((x * info.tileWidth) / scale);
+      const y0 = Math.round((y * info.tileHeight) / scale);
+      return (
+        `slide://tile/${encodeURIComponent(uploadId)}/` +
+        `${level}/${x0}_${y0}.png` +
+        `?tw=${info.tileWidth}&th=${info.tileHeight}`
+      );
+    },
+  };
+}
 
 /**
  * Create a tile fetcher that uses Electron IPC to get tiles.
