@@ -23,6 +23,7 @@ import {
 import OpenSeadragon from "openseadragon";
 
 import styles from "./SvsViewer.module.css";
+import { isElectronRuntime } from "../../platform/runtime";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -111,6 +112,37 @@ export const SvsViewer = forwardRef<SvsViewerHandle, SvsViewerProps>(
 
       const init = async () => {
         try {
+          // ── Electron mode: simple image viewer via slide_preview ──
+          if (isElectronRuntime()) {
+            const electron = (window as any).electronAPI;
+            if (!electron?.call) throw new Error("Electron API not available");
+            const slideSrc: string = await electron.call("uploadSlidePreview", { uploadId });
+            if (!active || disposedRef.current) return;
+            if (!slideSrc) throw new Error("切片预览不可用");
+
+            destroyViewer();
+            if (!active || disposedRef.current) return;
+
+            const viewer = OpenSeadragon({
+              element: containerRef.current!,
+              prefixUrl,
+              tileSources: { type: "image" as any, url: slideSrc },
+              visibilityRatio: 1,
+              minZoomImageRatio: 1,
+              showNavigationControl: true,
+              showNavigator: true,
+              navigatorPosition: "BOTTOM_RIGHT",
+              navigatorSizeRatio: 0.15,
+              immediateRender: false,
+              constrainDuringPan: true,
+            });
+            viewerRef.current = viewer;
+            viewer.addHandler("open", () => { if (active && !disposedRef.current) { setStatus("ready"); onReady?.(); } });
+            viewer.addHandler("open-failed", () => { if (active && !disposedRef.current) { setStatus("error"); setErrorMessage("无法打开切片预览"); onError?.("open-failed"); } });
+            return;
+          }
+
+          // ── Web mode: IIIF deep zoom ─────────────────────────
           // Step 1: fetch IIIF info.json
           console.log("[SvsViewer] fetching IIIF info for:", uploadId);
           const iiif = await fetchIiifInfo(uploadId, apiBase);

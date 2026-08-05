@@ -6,4 +6,22 @@ win:
     - target: nsis
       arch:
         - x64
-
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  # Standalone installer layout (aligned with thyromet.bak reference):
+  #   Program Files\Ret\
+  #     Ret.exe                    ← the only visible file
+  #     db.db                      ← SQLite database (alongside exe)
+  #     resources\
+  #       app.asar                 ← Electron + Node code
+  #       model\                   ← Python worker + venv + models
+  #         worker.py
+  #         venv-LMN-1.0\
+  #         *.pt
+  #         CLAM-master\
+  #         extract_tile.py
+  #       openslide\               ← OpenSlide native DLLs
+  #         bin\
+  #         lib\
+  #       web\                     ← Vite-built frontend

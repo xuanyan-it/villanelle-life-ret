@@ -36,18 +36,26 @@ export const resolveRuntimePaths = (nodeEnv?: string): RuntimePaths => {
   const isPackaged = app.isPackaged;
   const envLabel: RuntimePaths["envLabel"] = isPackaged ? "prod" : "dev";
 
-  // In packaged (portable) mode the .exe self-extracts to a temp directory,
-  // but the Python runtime & models live *outside* the package — on the USB
-  // drive next to the .exe.  PORTABLE_EXECUTABLE_DIR is set by electron-builder
-  // to the folder containing the original .exe.
+  // In packaged mode, extraResources are placed in the resources/ directory.
+  // Portable builds also use PORTABLE_EXECUTABLE_DIR for USB drive layout.
+  const resourcesPath = isPackaged
+    ? (process.resourcesPath ?? path.join(path.dirname(app.getPath("exe")), "resources"))
+    : "";
   const rootDir = isPackaged
-    ? env.PORTABLE_EXECUTABLE_DIR || path.dirname(app.getPath("exe"))
+    ? (env.PORTABLE_EXECUTABLE_DIR || resourcesPath)
     : resolveDevelopmentRoot();
 
-  // MODEL_DIR env var allows explicit override; otherwise look for
-  // assets/models/ next to the .exe (the USB drive root).
+  // MODEL_DIR env var allows explicit override.
+  // Supports both new `model/` layout (NSIS standalone) and legacy
+  // `assets/models/` layout (portable USB / development).
+  const candidates = [
+    path.join(rootDir, "model"),
+    path.join(rootDir, "assets", "models"),
+  ];
   const modelDir =
-    env.MODEL_DIR || path.join(rootDir, "assets", "models");
+    env.MODEL_DIR ||
+    candidates.find((d) => fs.existsSync(path.join(d, "worker.py"))) ||
+    candidates[0]!;
 
   const bundledPython =
     process.platform === "win32"

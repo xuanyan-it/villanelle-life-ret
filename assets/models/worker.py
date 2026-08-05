@@ -33,7 +33,14 @@ if str(_CLAM_DIR) not in sys.path:
     sys.path.insert(0, str(_CLAM_DIR))
 
 # ---------- Offline: ensure bundled OpenSlide DLLs are findable ----------
-_OPENSLIDE_DIR = _PROJ.parent / "openslide" / "bin"
+# Supports both layouts:
+#   assets/models/ + assets/openslide/bin/  (development / portable)
+#   model/ + model/openslide/bin/            (NSIS standalone)
+_OPENSLIDE_CANDIDATES = [
+    _PROJ / "openslide" / "bin",       # model/openslide/bin/ (NSIS)
+    _PROJ.parent / "openslide" / "bin", # assets/openslide/bin/ (dev/portable)
+]
+_OPENSLIDE_DIR = next((d for d in _OPENSLIDE_CANDIDATES if d.is_dir()), _OPENSLIDE_CANDIDATES[0])
 _OPENSLIDE_DLL_HANDLE = None
 if _OPENSLIDE_DIR.is_dir():
     os.environ["PATH"] = str(_OPENSLIDE_DIR) + os.pathsep + os.environ.get("PATH", "")

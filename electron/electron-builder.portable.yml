@@ -8,17 +8,16 @@ win:
         - x64
 portable:
   splashImage: assets/portable-splash.bmp
-  # Fixed directory so extraction only happens once.
-  # Python runtime / models / OpenSlide are NOT bundled — they live as
-  # plain files next to the .exe on the USB drive.  The app resolves them
-  # via PORTABLE_EXECUTABLE_DIR at runtime.  Result: the portable .exe is
-  # ~150 MB (Electron + frontend only) and launches in seconds.
+  # Portable / USB mode: Python runtime, models, and OpenSlide live as
+  # plain files next to the .exe on the USB drive (NOT inside resources/).
+  # The app resolves them via PORTABLE_EXECUTABLE_DIR at runtime.
+  # The extraResources from the base config are included, but at runtime
+  # the portable uses PORTABLE_EXECUTABLE_DIR first.
   #
-  # USB drive layout expected by the app:
+  # USB drive layout:
   #   Ret\
   #     Ret.exe
   #     assets\
   #       models\          ← python-runtime, venv-LMN-1.0, worker.py, *.pt
   #       openslide\       ← OpenSlide binaries
   unpackDirName: ret-app
-
