@@ -8,6 +8,9 @@ win:
       arch:
         - x64
 portable:
+  # Splash image shown while the portable exe self-extracts on launch
+  # (before the app window appears).  Must be a BMP file.
+  splashImage: assets/portable-splash.bmp
   # model/ is external — Python runtime, venv, OpenSlide, and ML weights
   # live as plain files on the USB drive next to Ret-portable.exe.
   # Runtime data (logs/, uploads/) is also kept inside model/ so the root

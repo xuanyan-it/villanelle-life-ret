@@ -13,6 +13,8 @@ export type IpcContext = {
   authSession: AuthSession;
   workerCommand: string;
   workerArgs: string[];
+  tileWorkerCommand: string;
+  tileWorkerArgs: string[];
   emitShellOutput: (payload: unknown) => void;
   onLoginSuccess?: () => void | Promise<void>;
   onLogout?: () => void | Promise<void>;

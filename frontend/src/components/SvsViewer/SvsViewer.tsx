@@ -22,10 +22,14 @@ import {
 } from "react";
 import OpenSeadragon from "openseadragon";
 
+import { Switch } from "antd";
+
 import styles from "./SvsViewer.module.css";
 import { isElectronRuntime } from "../../platform/runtime";
 import {
-  buildElectronTileSource,
+  buildWebTileSource,
+  buildNativeTileSource,
+  type ElectronTileMode,
   type SlideInfo,
 } from "./ServerTileSource";
 
@@ -79,7 +83,12 @@ export const SvsViewer = forwardRef<SvsViewerHandle, SvsViewerProps>(
     {
       uploadId,
       apiBase = "",
-      prefixUrl = "/openseadragon/images/",
+      // Web: absolute path from public/ (http://host/openseadragon/images/).
+      // Electron: file:// cannot resolve absolute paths, so use a relative
+      // path from index.html (resources/web/openseadragon/images/).
+      prefixUrl = isElectronRuntime()
+        ? "./openseadragon/images/"
+        : "/openseadragon/images/",
       onReady,
       onError,
       className,
@@ -93,6 +102,28 @@ export const SvsViewer = forwardRef<SvsViewerHandle, SvsViewerProps>(
     const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
     const [errorMessage, setErrorMessage] = useState<string>("");
     const [dimensions, setDimensions] = useState<{ w: number; h: number } | null>(null);
+
+    // ── Tile mode (Electron only): web-style fixed IIIF factors (default)
+    // vs native all-pyramid-levels.  Persisted across sessions.
+    const TILE_MODE_KEY = "ret-svs-tile-mode";
+    const [tileMode, setTileMode] = useState<ElectronTileMode>(() => {
+      try {
+        return localStorage.getItem(TILE_MODE_KEY) === "native"
+          ? "native"
+          : "web";
+      } catch {
+        return "web";
+      }
+    });
+    const handleTileModeChange = (checked: boolean) => {
+      const next: ElectronTileMode = checked ? "native" : "web";
+      setTileMode(next);
+      try {
+        localStorage.setItem(TILE_MODE_KEY, next);
+      } catch {
+        // ignore storage failures
+      }
+    };
 
     // ── Cleanup ──────────────────────────────────────────────────
 
@@ -139,7 +170,10 @@ export const SvsViewer = forwardRef<SvsViewerHandle, SvsViewerProps>(
             setDimensions({ w: slideInfo.levelDimensions[0].width, h: slideInfo.levelDimensions[0].height });
 
             // Step 2: build tile source (slide:// protocol serves tiles via IPC → worker)
-            const tileSource = buildElectronTileSource(slideInfo, uploadId);
+            const tileSource =
+              tileMode === "native"
+                ? buildNativeTileSource(slideInfo, uploadId)
+                : buildWebTileSource(slideInfo, uploadId);
 
             // Step 3: create viewer (same config as web mode)
             destroyViewer();
@@ -250,7 +284,7 @@ export const SvsViewer = forwardRef<SvsViewerHandle, SvsViewerProps>(
         disposedRef.current = true;
         destroyViewer();
       };
-    }, [uploadId, apiBase, prefixUrl, destroyViewer, onReady, onError]);
+    }, [uploadId, apiBase, prefixUrl, destroyViewer, onReady, onError, tileMode]);
 
     // ── Cleanup on unmount ───────────────────────────────────────
 
@@ -304,6 +338,19 @@ export const SvsViewer = forwardRef<SvsViewerHandle, SvsViewerProps>(
         {status === "idle" && !uploadId && (
           <div className={styles.overlay}>
             <span className={styles.overlayText}>请先上传 SVS 文件</span>
+          </div>
+        )}
+
+        {/* Tile mode toggle — Electron only.  Off (default) = web-style
+            fixed IIIF factors; on = all native pyramid levels (finer). */}
+        {isElectronRuntime() && uploadId && (
+          <div className={styles.modeToggle} title="高细节：使用全部原生金字塔层级（更细、瓦片更多）">
+            <span>高细节</span>
+            <Switch
+              size="small"
+              checked={tileMode === "native"}
+              onChange={handleTileModeChange}
+            />
           </div>
         )}
 

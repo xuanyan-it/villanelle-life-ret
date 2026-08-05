@@ -94,30 +94,86 @@ export function buildCustomTileSource(
   };
 }
 
-// ── Electron slide:// protocol tile source ────────────────────────────
+// ── Electron slide:// protocol tile sources ────────────────────────────
+
+export type ElectronTileMode = "web" | "native";
 
 /**
- * Build a tile source that fetches tiles via the Electron `slide://` protocol.
- *
- * Aligned with the Web IIIF path (SvsViewer.tsx web branch):
- *   - `getLevelScale` uses the real OpenSlide downsample factors instead of
- *     OSD's default power-of-2 assumption (SVS pyramids are usually 1/4/16/64).
- *   - `getTileUrl` converts OSD tile indices → level-0 pixel coordinates,
- *     matching how the IIIF TileSource computes regions for read_region().
- *
- * The `slide://` protocol is handled by the main process, which calls the
- * Python worker to extract tiles.  The URL format is:
- *   slide://tile/{uploadId}/{level}/{x0}_{y0}.png?tw={tileWidth}&th={tileHeight}
- * where {x0},{y0} are LEVEL-0 pixel coordinates (worker read_region contract).
+ * Web-style tile source — fixed IIIF scale factors [1, 4, 16, 64, 256, 1024]
+ * filtered to the slide size, exactly matching the server's iiifInfo.  Fewer,
+ * coarser tiles → same tile count as Web.  Each IIIF level is served from the
+ * real SVS level whose downsample is closest, with sf/ds so the worker can
+ * downscale when they differ.  URL format:
+ *   slide://tile/{uploadId}/{realLevel}/{x0}_{y0}.png
+ *     ?tw={tileWidth}&th={tileHeight}&sf={factor}&ds={realDownsample}
  */
-export function buildElectronTileSource(
+export function buildWebTileSource(
   info: SlideInfo,
   uploadId: string,
 ): Record<string, unknown> {
   const level0 = info.levelDimensions[0]!;
 
-  const getLevelScale = (level: number): number =>
-    1 / (info.levelDownsamples[level] ?? Math.pow(2, level));
+  const allFactors = [1, 4, 16, 64, 256, 1024];
+  const maxDim = Math.max(level0.width, level0.height);
+  const tileSize = info.tileWidth || 256;
+  const scaleFactors = allFactors.filter(
+    (s) => s * tileSize <= maxDim * 1.1,
+  );
+  if (scaleFactors.length === 0) {
+    scaleFactors.push(1);
+  }
+
+  // Map each IIIF level to the real SVS level with the closest downsample.
+  const realLevels = scaleFactors.map((factor) => {
+    let best = 0;
+    let bestDiff = Infinity;
+    info.levelDownsamples.forEach((downsample, index) => {
+      const diff = Math.abs(downsample - factor);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = index;
+      }
+    });
+    return best;
+  });
+  const realDownsamples = scaleFactors.map(
+    (factor, index) => info.levelDownsamples[realLevels[index]] ?? factor,
+  );
+
+  return {
+    width: level0.width,
+    height: level0.height,
+    tileWidth: info.tileWidth,
+    tileHeight: info.tileHeight,
+    tileOverlap: 0,
+    minLevel: 0,
+    maxLevel: scaleFactors.length - 1,
+    getLevelScale: (level: number): number =>
+      1 / (scaleFactors[level] ?? Math.pow(2, level)),
+    getTileUrl(level: number, x: number, y: number): string {
+      const factor = scaleFactors[level] ?? Math.pow(2, level);
+      const x0 = Math.round(x * info.tileWidth * factor);
+      const y0 = Math.round(y * info.tileHeight * factor);
+      return (
+        `slide://tile/${encodeURIComponent(uploadId)}/` +
+        `${realLevels[level]}/${x0}_${y0}.png` +
+        `?tw=${info.tileWidth}&th=${info.tileHeight}` +
+        `&sf=${factor}&ds=${realDownsamples[level]}`
+      );
+    },
+  };
+}
+
+/**
+ * Native tile source — exposes every real SVS pyramid level
+ * (getLevelScale = 1/downsample).  Finest possible zoom detail, but requests
+ * more tiles than web at the same zoom (includes 2x/8x/32x … levels).
+ */
+export function buildNativeTileSource(
+  info: SlideInfo,
+  uploadId: string,
+): Record<string, unknown> {
+  const level0 = info.levelDimensions[0]!;
 
   return {
     width: level0.width,
@@ -127,11 +183,10 @@ export function buildElectronTileSource(
     tileOverlap: 0,
     minLevel: 0,
     maxLevel: info.levels - 1,
-    getLevelScale,
+    getLevelScale: (level: number): number =>
+      1 / (info.levelDownsamples[level] ?? Math.pow(2, level)),
     getTileUrl(level: number, x: number, y: number): string {
-      // OSD passes tile indices (column/row).  The worker's read_region
-      // takes level-0 pixel coords, so scale like the IIIF path does.
-      const scale = getLevelScale(level);
+      const scale = 1 / (info.levelDownsamples[level] ?? Math.pow(2, level));
       const x0 = Math.round((x * info.tileWidth) / scale);
       const y0 = Math.round((y * info.tileHeight) / scale);
       return (

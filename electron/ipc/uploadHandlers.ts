@@ -95,8 +95,11 @@ export const registerUploadHandlers = (context: IpcContext) => {
         undefined,
         "extract-tile",
       );
-      // result is the base64-encoded PNG tile
-      return `data:image/png;base64,${result}`;
+      // result is the raw PNG tile (binary frame protocol)
+      const buf = Buffer.isBuffer(result)
+        ? result
+        : Buffer.from(String(result), "base64");
+      return `data:image/png;base64,${buf.toString("base64")}`;
     },
   );
 
@@ -111,7 +114,7 @@ export const registerUploadHandlers = (context: IpcContext) => {
         undefined,
         "slide-info",
       );
-      return JSON.parse(result);
+      return JSON.parse(String(result));
     },
   );
 };

@@ -58,6 +58,8 @@ protocol.registerSchemesAsPrivileged([
 
 let workerCommand = "";
 let workerArgs: string[] = [];
+let tileWorkerCommand = "";
+let tileWorkerArgs: string[] = [];
 
 app.setAppUserModelId("ret");
 
@@ -103,7 +105,13 @@ const prewarmWorkerAfterLogin = async (
   }
 
   try {
-    await workerManager.start(workerCommand, workerArgs);
+    await workerManager.start(
+      workerCommand,
+      workerArgs,
+      undefined,
+      tileWorkerCommand,
+      tileWorkerArgs,
+    );
     await workerManager.ensureReady(2100000);
   } catch (error) {
     logger.warn("[worker] start failed", {
@@ -191,6 +199,8 @@ const createWindow = () => {
 
   workerCommand = pythonExePath;
   workerArgs = ["-u", workerScriptPath];
+  tileWorkerCommand = pythonExePath;
+  tileWorkerArgs = ["-u", workerScriptPath, "--tile-only"];
 
   attachRendererBootstrap({
     mainWindow,
@@ -224,6 +234,8 @@ const createWindow = () => {
     authSession,
     workerCommand,
     workerArgs,
+    tileWorkerCommand,
+    tileWorkerArgs,
     emitShellOutput,
     onLogout: () => {
       authSession.clear();

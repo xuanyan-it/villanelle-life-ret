@@ -11,6 +11,8 @@ Offline / USB deployment:
   Bundled venv at ../venv-LMN-1.0/, OpenSlide DLLs at ../openslide/bin/.
 """
 
+from __future__ import annotations  # defer annotation evaluation (tile-only mode has no np/torch)
+
 import glob
 import contextlib
 import json
@@ -22,9 +24,16 @@ import tempfile
 import traceback
 from pathlib import Path
 
-import h5py
-import numpy as np
-import torch
+# Tile-only mode: skip the heavy torch / CLAM imports.  Lightweight tile
+# workers (extract-tile / slide-info) start in ~1s instead of ~30s and use
+# far less memory.  The predict worker runs WITHOUT the flag and loads the
+# full model stack as before.
+_TILE_ONLY = "--tile-only" in sys.argv
+
+if not _TILE_ONLY:
+    import h5py
+    import numpy as np
+    import torch
 
 # ==================== Bootstrap ====================
 _PROJ = Path(__file__).resolve().parent  # assets/models/
@@ -49,7 +58,8 @@ if _OPENSLIDE_DIR.is_dir():
         # from this interpreter's DLL search path.
         _OPENSLIDE_DLL_HANDLE = os.add_dll_directory(str(_OPENSLIDE_DIR))
 
-from models.model_clam import CLAM_MB  # noqa: E402
+if not _TILE_ONLY:
+    from models.model_clam import CLAM_MB  # noqa: E402
 
 # ==================== Configuration ====================
 PRESET = os.environ.get("CLAM_PRESET", str(_CLAM_DIR / "presets" / "bwh_biopsy.csv"))
@@ -59,7 +69,11 @@ RESNET_WEIGHTS_PATH = Path(
         str(_PROJ / "resnet50.tv_in1k.safetensors"),
     )
 )
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = (
+    torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if not _TILE_ONLY
+    else None
+)
 SLIDE_EXT = ".svs"
 PATCH_SIZE = 256
 STEP_SIZE = 256
@@ -565,6 +579,55 @@ def handle_predict(msg: dict) -> None:
         shutil.rmtree(work_root, ignore_errors=True)
 
 
+# ==================== Slide Handle Cache ====================
+
+_SLIDE_CACHE: dict = {}
+_SLIDE_CACHE_MAX = 8
+
+
+def _get_slide(slide_path: str):
+    """Return a cached OpenSlide handle, opening it on first use.
+
+    Opening an SVS with OpenSlide is expensive (parses the TIFF/pyramid
+    structure).  Tile serving reuses the handle instead of reopening per
+    tile, which keeps Electron tile loading as fast as the Web/IIIF path.
+    """
+    import openslide
+
+    slide = _SLIDE_CACHE.get(slide_path)
+    if slide is not None:
+        return slide
+    if len(_SLIDE_CACHE) >= _SLIDE_CACHE_MAX:
+        _, evicted = _SLIDE_CACHE.popitem()
+        try:
+            evicted.close()
+        except Exception:
+            pass
+    slide = openslide.OpenSlide(slide_path)
+    _SLIDE_CACHE[slide_path] = slide
+    return slide
+
+
+# ==================== In-Memory Tile Cache ====================
+
+_TILE_CACHE: dict = {}
+_TILE_CACHE_MAX = 512
+
+
+def _cache_tile(slide_path: str, level: int, x: int, y: int, tw: int, th: int, sf: float, data: bytes) -> None:
+    """Store an extracted tile PNG in a bounded FIFO cache."""
+    if len(_TILE_CACHE) >= _TILE_CACHE_MAX:
+        try:
+            _TILE_CACHE.pop(next(iter(_TILE_CACHE)))
+        except (StopIteration, KeyError):
+            pass
+    _TILE_CACHE[(slide_path, level, x, y, tw, th, sf)] = data
+
+
+def _cached_tile(slide_path: str, level: int, x: int, y: int, tw: int, th: int, sf: float = 0):
+    return _TILE_CACHE.get((slide_path, level, x, y, tw, th, sf))
+
+
 def handle_slide_info(msg: dict) -> None:
     """Return slide metadata via OpenSlide.
 
@@ -581,23 +644,19 @@ def handle_slide_info(msg: dict) -> None:
         return
 
     try:
-        import openslide
-        slide = openslide.OpenSlide(slide_path)
-        try:
-            dims = slide.level_dimensions
-            downs = slide.level_downsamples
-            info = {
-                "width": slide.dimensions[0],
-                "height": slide.dimensions[1],
-                "tileWidth": int(slide.properties.get("openslide.level[0].tile-width", 256)),
-                "tileHeight": int(slide.properties.get("openslide.level[0].tile-height", 256)),
-                "levels": slide.level_count,
-                "levelDimensions": [{"width": int(w), "height": int(h)} for w, h in dims],
-                "levelDownsamples": [float(d) for d in downs],
-            }
-            write_line({"id": msg_id, "ok": True, "result": json.dumps(info)})
-        finally:
-            slide.close()
+        slide = _get_slide(slide_path)
+        dims = slide.level_dimensions
+        downs = slide.level_downsamples
+        info = {
+            "width": slide.dimensions[0],
+            "height": slide.dimensions[1],
+            "tileWidth": int(slide.properties.get("openslide.level[0].tile-width", 256)),
+            "tileHeight": int(slide.properties.get("openslide.level[0].tile-height", 256)),
+            "levels": slide.level_count,
+            "levelDimensions": [{"width": int(w), "height": int(h)} for w, h in dims],
+            "levelDownsamples": [float(d) for d in downs],
+        }
+        write_line({"id": msg_id, "ok": True, "result": json.dumps(info)})
     except Exception:
         write_line({"id": msg_id, "ok": False, "error": traceback.format_exc()})
 
@@ -607,10 +666,11 @@ def handle_extract_tile(msg: dict) -> None:
 
     Input:  {"id":"...", "cmd":"extract-tile", "slidePath":"...",
              "level":0, "x":0, "y":0,
-             "tileWidth":256, "tileHeight":256}
-    Output: {"id":"...", "ok":true, "tile":"base64png..."}
+             "tileWidth":256, "tileHeight":256,
+             "scaleFactor":<IIIF factor>, "realDownsample":<level downsample>}
+    Output: JSON announce line then raw PNG bytes (binary frame, no base64):
+            {"id":"...", "ok":true, "type":"tile", "length":<n>} + <n raw bytes>
     """
-    import base64
     import io
 
     msg_id = str(msg.get("id", ""))
@@ -620,23 +680,42 @@ def handle_extract_tile(msg: dict) -> None:
     y = int(msg.get("y", 0))
     tile_w = int(msg.get("tileWidth", 256))
     tile_h = int(msg.get("tileHeight", 256))
+    scale_factor = float(msg.get("scaleFactor", 0) or 0)
+    real_downsample = float(msg.get("realDownsample", 0) or 0)
 
     if not slide_path or not os.path.isfile(slide_path):
         write_line({"id": msg_id, "ok": False, "error": f"slide file not found: {slide_path}"})
         return
 
     try:
-        import openslide
-        slide = openslide.OpenSlide(slide_path)
-        try:
-            # read_region params are in level-0 coordinates
-            region = slide.read_region((x, y), level, (tile_w, tile_h))
+        data = _cached_tile(slide_path, level, x, y, tile_w, tile_h, scale_factor)
+        if data is None:
+            slide = _get_slide(slide_path)
+            if (
+                scale_factor > 1
+                and real_downsample > 0
+                and abs(scale_factor - real_downsample) > 0.5
+            ):
+                # The real pyramid level differs from the IIIF scale factor —
+                # read a wider region at the real level then downscale (same
+                # result as the web server's level-0 + resize path).
+                from PIL import Image
+
+                read_w = max(1, round(tile_w * scale_factor / real_downsample))
+                read_h = max(1, round(tile_h * scale_factor / real_downsample))
+                region = slide.read_region((x, y), level, (read_w, read_h))
+                if (read_w, read_h) != (tile_w, tile_h):
+                    region = region.resize((tile_w, tile_h), Image.LANCZOS)
+            else:
+                # read_region params are in level-0 coordinates
+                region = slide.read_region((x, y), level, (tile_w, tile_h))
             buf = io.BytesIO()
             region.save(buf, format="PNG")
-            tile_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-            write_line({"id": msg_id, "ok": True, "result": tile_b64})
-        finally:
-            slide.close()
+            data = buf.getvalue()
+            _cache_tile(slide_path, level, x, y, tile_w, tile_h, scale_factor, data)
+        write_line({"id": msg_id, "ok": True, "type": "tile", "length": len(data)})
+        sys.stdout.buffer.write(data)
+        sys.stdout.buffer.flush()
     except Exception:
         write_line({"id": msg_id, "ok": False, "error": traceback.format_exc()})
 

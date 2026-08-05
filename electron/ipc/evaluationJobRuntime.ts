@@ -48,6 +48,8 @@ type EvaluationJobRuntimeDeps = {
   localUploadStore: LocalUploadStore;
   workerCommand: string;
   workerArgs: string[];
+  tileWorkerCommand: string;
+  tileWorkerArgs: string[];
   mainWindow: BrowserWindow;
   emitShellOutput: (payload: unknown) => void;
   createSampleRecords: (record: Omit<SampleRecord, "uuid">) => Promise<SampleRecord>;
@@ -132,7 +134,13 @@ export const createEvaluationJobRuntime = (deps: EvaluationJobRuntimeDeps) => {
       parsedRecord.uploadId,
       parsedRecord.slideFileName,
     );
-    await deps.workerManager.start(deps.workerCommand, deps.workerArgs);
+    await deps.workerManager.start(
+      deps.workerCommand,
+      deps.workerArgs,
+      undefined,
+      deps.tileWorkerCommand,
+      deps.tileWorkerArgs,
+    );
     return deps.workerManager.request(
       {
         slidePath,

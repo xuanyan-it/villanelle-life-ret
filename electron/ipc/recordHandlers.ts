@@ -46,6 +46,8 @@ export const registerRecordHandlers = (context: IpcContext) => {
     localUploadStore,
     workerCommand,
     workerArgs,
+    tileWorkerCommand,
+    tileWorkerArgs,
     mainWindow,
   } = context;
   const { registerEnvelope, registerRaw } = createIpcHandlerFactory(context);
@@ -55,6 +57,8 @@ export const registerRecordHandlers = (context: IpcContext) => {
     localUploadStore,
     workerCommand,
     workerArgs,
+    tileWorkerCommand,
+    tileWorkerArgs,
     mainWindow,
     emitShellOutput,
     createSampleRecords,

@@ -55,6 +55,10 @@ export function registerSlideProtocolHandler(
         url.searchParams.get("th") || "256",
         10,
       );
+      // IIIF scale factor (target) and the real level's downsample — used by
+      // the worker to downscale when the real level differs from the factor.
+      const scaleFactor = parseFloat(url.searchParams.get("sf") || "0");
+      const realDownsample = parseFloat(url.searchParams.get("ds") || "0");
 
       if (
         !uploadId ||
@@ -66,7 +70,7 @@ export function registerSlideProtocolHandler(
 
       const slidePath = await localUploadStore.getSlidePath(uploadId);
 
-      const result: string = await workerManager.request(
+      const result = await workerManager.request(
         {
           slidePath,
           level,
@@ -74,13 +78,17 @@ export function registerSlideProtocolHandler(
           y,
           tileWidth,
           tileHeight,
+          scaleFactor,
+          realDownsample,
         },
         undefined,
         "extract-tile",
       );
 
-      // result is base64-encoded PNG
-      const buf = Buffer.from(result, "base64");
+      // result is already the raw PNG (binary frame protocol)
+      const buf = Buffer.isBuffer(result)
+        ? result
+        : Buffer.from(String(result), "base64");
       return new Response(buf as unknown as BodyInit, {
         headers: { "Content-Type": "image/png" },
       });

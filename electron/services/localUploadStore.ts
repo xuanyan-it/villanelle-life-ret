@@ -147,6 +147,19 @@ export const createLocalUploadStore = (root: string) => {
 
     async complete(owner: string, uploadId: string) {
       const metadata = await readMetadata(uploadId, owner);
+      // Idempotent: if already assembled, verify the final file exists and
+      // return.  The chunks/ dir was deleted on the first completion, so a
+      // second call (e.g. resume/re-upload of the same file) must NOT try to
+      // re-read chunks — that would throw ENOENT.
+      if (metadata.status === "completed") {
+        const finalPath = path.join(
+          uploadDir(uploadId),
+          "input",
+          metadata.originalFileName,
+        );
+        await fs.access(finalPath);
+        return;
+      }
       if (metadata.uploadedChunks.length !== metadata.totalChunks) {
         throw new Error("upload is incomplete");
       }
