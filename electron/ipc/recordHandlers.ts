@@ -12,14 +12,17 @@ import {
 
 import {
   cancelPendingOrEvaluatingItems,
+  cancelAllPendingJobs,
   createEvaluationJob,
   createEvaluationJobItems,
   createSampleRecords,
   deleteSampleRecordsByUuids,
   deleteSampleRecords,
-  findActiveEvaluationJob,
   fetchSampleRecords,
+  findActiveEvaluationJob,
+  findNextPendingJob,
   getEvaluationJobByUuid,
+  listActiveEvaluationJobs,
   listEvaluationJobItems,
   listPendingOrEvaluatingItems,
   updateEvaluationJob,
@@ -68,10 +71,13 @@ export const registerRecordHandlers = (context: IpcContext) => {
     getEvaluationJobByUuid,
     listEvaluationJobItems,
     findActiveEvaluationJob,
+    findNextPendingJob,
+    listActiveEvaluationJobs,
     updateEvaluationJob,
     updateEvaluationJobItem,
     listPendingOrEvaluatingItems,
-    cancelPendingOrEvaluatingItems
+    cancelPendingOrEvaluatingItems,
+    cancelAllPendingJobs
   });
 
   registerEnvelope(

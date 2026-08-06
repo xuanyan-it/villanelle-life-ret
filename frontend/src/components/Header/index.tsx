@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Logo from "../Logo";
 import NewRecord from "../NewRecord";
+import QueuePopover from "../QueuePopover";
 import Settings from "../Settings";
 import styles from "./header.module.css";
 const Header = () => {
@@ -70,6 +71,8 @@ const Header = () => {
       </Flex>
       <Flex align="center">
         <NewRecord />
+        <Divider type="vertical" style={{ marginLeft: 24 }} />
+        <QueuePopover />
         <Divider type="vertical" style={{ marginLeft: 24 }} />
         
         <Settings />

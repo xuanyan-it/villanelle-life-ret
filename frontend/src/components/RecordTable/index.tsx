@@ -21,7 +21,6 @@ import {
   Spin,
   Tabs,
   Tag,
-  // Tooltip,
   Typography,
 } from "antd";
 import type { DescriptionsProps } from "antd/lib";
@@ -350,6 +349,44 @@ const RecordTable = () => {
   const [regeneratingHeatmap, setRegeneratingHeatmap] = useState(false);
   const [heatmapSrc, setHeatmapSrc] = useState<string | null>(null);
   const [heatmapChecking, setHeatmapChecking] = useState(false);
+  // Heatmap generation progress (polling)
+  const [heatmapGenerating, setHeatmapGenerating] = useState(false);
+  const [heatmapPollSeconds, setHeatmapPollSeconds] = useState(0);
+  const heatmapPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Record uuid whose evaluation we are waiting for (heatmap generation)
+  const heatmapWaitUuidRef = useRef<string | null>(null);
+
+  const clearHeatmapPoll = useCallback(() => {
+    if (heatmapPollRef.current) {
+      clearInterval(heatmapPollRef.current);
+      heatmapPollRef.current = null;
+    }
+  }, []);
+
+  // Subscribe to evaluationResponse — fires when the worker finishes
+  // evaluation (including heatmap generation).  Refresh heatmap on match.
+  useEffect(() => {
+    if (!isElectronRuntime) return;
+    const unsub = (window as any).electronAPI?.evaluationResponse?.(
+      (record: SampleRecordResponsePayload) => {
+        if (
+          heatmapWaitUuidRef.current &&
+          record.uuid === heatmapWaitUuidRef.current
+        ) {
+          heatmapWaitUuidRef.current = null;
+          setHeatmapGenerating(false);
+          clearHeatmapPoll();
+          // Reload heatmap source
+          if (detailUploadId) {
+            api.heatmapSource(detailUploadId)
+              .then((src) => setHeatmapSrc(src))
+              .catch(() => {});
+          }
+        }
+      },
+    );
+    return () => { unsub?.(); };
+  }, [clearHeatmapPoll, detailUploadId, isElectronRuntime]);
   const showDeletedOnly = useSelector((state: RootState) =>
     getDeletedOnly(state),
   );
@@ -360,6 +397,11 @@ const RecordTable = () => {
   useEffect(() => {
     setSearchInput(searchKeyword);
   }, [searchKeyword]);
+
+  // Cleanup heatmap polling on unmount
+  useEffect(() => {
+    return () => clearHeatmapPoll();
+  }, [clearHeatmapPoll]);
 
   // Check heatmap status when detail modal opens
   useEffect(() => {
@@ -510,33 +552,65 @@ const RecordTable = () => {
     setDescriptionOpen(false);
     setDetailUploadId("");
     setDetailRecord(null);
-    setSampleSourceDescriptionItems({} as DescriptionsProps["items"]);
-    setGeneInfoDescriptionItems({} as DescriptionsProps["items"]);
-    setReviewDescriptionItems({} as DescriptionsProps["items"]);
+    setHeatmapSrc(null);
+    setHeatmapGenerating(false);
+    setHeatmapPollSeconds(0);
+    heatmapWaitUuidRef.current = null;
+    clearHeatmapPoll();
+    setSampleSourceDescriptionItems(undefined);
+    setGeneInfoDescriptionItems(undefined);
+    setReviewDescriptionItems(undefined);
   };
 
   const handleRegenerateHeatmap = async (record: any) => {
+    if (!detailUploadId || !record) return;
+    const institute = record.instituteName ?? instituteName;
     setRegeneratingHeatmap(true);
     setHeatmapSrc(null);
+    setHeatmapGenerating(true);
+    setHeatmapPollSeconds(0);
+    clearHeatmapPoll();
     try {
-      await api.createSampleRecords({
+      const result = await api.createSampleRecords({
         ...record,
         generateHeatmap: true,
         evaluationAsync: true,
       } as any);
+      const jobUuid = (result as any)?.uuid;
+      let lastPct = 0;
+      // Poll job status for real progress percentage.
+      heatmapPollRef.current = setInterval(async () => {
+        if (!jobUuid) return;
+        try {
+          const s = await api.evaluationJobStatus({ jobUuid, instituteName: institute });
+          const pct = s?.progressPercent ?? lastPct;
+          lastPct = pct;
+          setHeatmapPollSeconds(pct);
+        } catch { /* keep last known pct */ }
+      }, 2000);
       dispatch(pushNotification({
         type: "success",
         message: "热力图生成已提交",
-        description: "请等待评估完成后刷新查看",
+        description: "",
       }));
-    } catch {
-      dispatch(pushNotification({
-        type: "error",
-        message: "热力图生成失败",
-        description: "请稍后重试",
-      }));
-    } finally {
-      setRegeneratingHeatmap(false);
+    } catch (err: any) {
+      if ((err?.message ?? "").includes("conflict")) {
+        dispatch(pushNotification({
+          type: "info",
+          message: "评估已在运行",
+          description: "等待评估完成自动刷新热力图",
+        }));
+      } else {
+        setHeatmapGenerating(false);
+        setRegeneratingHeatmap(false);
+        heatmapWaitUuidRef.current = null;
+        clearHeatmapPoll();
+        dispatch(pushNotification({
+          type: "error",
+          message: "热力图生成失败",
+          description: "请稍后重试",
+        }));
+      }
     }
   };
 
@@ -1101,55 +1175,76 @@ const RecordTable = () => {
         className={descriptionDeleted ? "description-deleted" : ""}
         styles={{ body: { maxHeight: "calc(100vh - 160px)", overflowY: "auto", padding: 16 } }}
       >
-        <Row gutter={16}>
-          <Col xs={24} lg={10}>
-            <Flex vertical gap={8}>
-              <Divider orientation="left" style={{ margin: "4px 0" }}>{t("recordTable_sampleSource")}</Divider>
-              <Descriptions items={sampleSourceDescriptionItems} bordered layout="vertical" size="small" />
-              <Divider orientation="left" style={{ margin: "4px 0" }}>{t("recordTable_geneInfo")}</Divider>
-              <Descriptions items={geneInfoDescriptionItems} bordered layout="vertical" size="small" column={{ xs: 1, sm: 2 }} />
-              <Divider orientation="left" style={{ margin: "4px 0" }}>{t("recordTable_review")}</Divider>
-              <Descriptions items={reviewDescriptionItems} bordered layout="vertical" size="small" />
+        {/* ── Three-column layout: info | SVS | heatmap ── */}
+        <Row gutter={12}>
+          <Col xs={24} lg={6}>
+            <Flex vertical gap={8} style={{ maxHeight: "calc(100vh - 200px)", overflowY: "auto" }}>
+              {/* SVS file name — wide, single column */}
+              <Descriptions items={sampleSourceDescriptionItems?.slice(0, 1) ?? []} bordered size="small" column={1} />
+              {/* All other fields — one per row */}
+              <Descriptions items={sampleSourceDescriptionItems?.slice(1) ?? []} bordered size="small" column={1} />
+              <Descriptions items={geneInfoDescriptionItems} bordered size="small" column={{ xs: 1, sm: 2 }} />
+              {/* 测试者 + 审核人 — side by side */}
+              <Descriptions items={reviewDescriptionItems?.slice(0, 2) ?? []} bordered size="small" column={{ xs: 1, sm: 2 }} />
+              {/* 备注 — full width */}
+              <Descriptions items={reviewDescriptionItems?.slice(2) ?? []} bordered size="small" column={1} />
             </Flex>
           </Col>
-          <Col xs={24} lg={14}>
-            {detailUploadId ? (
-              <Tabs
-                defaultActiveKey="svs"
-                size="small"
-                style={{ height: "100%" }}
-                tabBarStyle={{ margin: 0, padding: "0 12px", background: "#fafafa", borderRadius: "6px 6px 0 0", border: "1px solid #d9d9d9", borderBottom: 0 }}
-                items={[
-                  {
-                    key: "svs",
-                    label: "切片预览",
-                    children: (
-                      <div style={{ height: "calc(100vh - 240px)", minHeight: 480, borderRadius: "0 0 6px 6px", overflow: "hidden", border: "1px solid #d9d9d9", borderTop: 0 }}>
-                        <SvsViewer uploadId={detailUploadId} />
-                      </div>
-                    ),
-                  },
-                  {
-                    key: "heatmap",
-                    label: "热力图",
-                    children: (
-                      <div style={{ height: "calc(100vh - 240px)", minHeight: 480, borderRadius: "0 0 6px 6px", overflow: "hidden", border: "1px solid #d9d9d9", borderTop: 0 }}>
-                        <HeatmapOsdViewer
-                          src={heatmapSrc}
-                          loading={heatmapChecking || regeneratingHeatmap}
-                          regenerating={regeneratingHeatmap}
-                          onRegenerate={() => handleRegenerateHeatmap(detailRecord)}
-                        />
-                      </div>
-                    ),
-                  },
-                ]}
-              />
-            ) : (
-              <Flex align="center" justify="center" style={{ height: 200 }}>
-                <Typography.Text type="secondary">切片预览加载中…</Typography.Text>
-              </Flex>
-            )}
+          <Col xs={24} lg={9}>
+            <div style={{
+              background: "#111",
+              borderRadius: "6px",
+              overflow: "hidden",
+              border: "1px solid #d9d9d9",
+              height: "calc(100vh - 200px)",
+              minHeight: 480,
+            }}>
+              {detailUploadId ? (
+                <SvsViewer uploadId={detailUploadId} />
+              ) : (
+                <Flex align="center" justify="center" style={{ height: "100%" }}>
+                  <Typography.Text style={{ color: "#ccc" }}>切片预览加载中…</Typography.Text>
+                </Flex>
+              )}
+            </div>
+          </Col>
+          <Col xs={24} lg={9}>
+            <div style={{
+              background: "#111",
+              borderRadius: "6px",
+              overflow: "hidden",
+              border: "1px solid #d9d9d9",
+              height: "calc(100vh - 200px)",
+              minHeight: 480,
+            }}>
+              {!detailUploadId ? (
+                <Flex align="center" justify="center" style={{ height: "100%" }}>
+                  <Typography.Text style={{ color: "#ccc" }}>切片预览加载中…</Typography.Text>
+                </Flex>
+              ) : heatmapSrc ? (
+                <HeatmapOsdViewer src={heatmapSrc} loading={false} regenerating={false} />
+              ) : heatmapChecking || heatmapGenerating ? (
+                <Flex vertical align="center" justify="center" style={{ height: "100%" }} gap={12}>
+                  <Spin size="large" />
+                  <Typography.Text style={{ color: "#ccc" }}>
+                    {heatmapGenerating
+                      ? `热力图生成中… ${heatmapPollSeconds}%`
+                      : "正在加载热力图…"}
+                  </Typography.Text>
+                </Flex>
+              ) : (
+                <Flex vertical align="center" justify="center" style={{ height: "100%" }} gap={12}>
+                  <Typography.Text style={{ color: "#ccc" }}>{t("recordTable_geneInfo_heatmapUnavailable")}</Typography.Text>
+                  <Button
+                    type="primary"
+                    loading={regeneratingHeatmap}
+                    onClick={() => handleRegenerateHeatmap(detailRecord)}
+                  >
+                    生成热力图
+                  </Button>
+                </Flex>
+              )}
+            </div>
           </Col>
         </Row>
       </DraggableModal>

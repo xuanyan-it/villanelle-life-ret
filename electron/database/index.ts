@@ -257,6 +257,28 @@ export const findActiveEvaluationJob = async (params: {
   );
 };
 
+/** Returns the oldest pending evaluation job (FIFO queue order). */
+export const findNextPendingJob = async (params: {
+  instituteName: string;
+  createdByUsername: string;
+}) => {
+  return get<EvaluationJobRow>(
+    "SELECT * FROM evaluation_job WHERE instituteName = ? AND createdByUsername = ? AND status = 'pending' ORDER BY id ASC LIMIT 1",
+    [params.instituteName, params.createdByUsername]
+  );
+};
+
+/** Lists all active evaluation jobs (pending + evaluating) for an institute/user. */
+export const listActiveEvaluationJobs = async (params: {
+  instituteName: string;
+  createdByUsername: string;
+}) => {
+  return all<EvaluationJobRow>(
+    "SELECT * FROM evaluation_job WHERE instituteName = ? AND createdByUsername = ? AND status IN ('pending','evaluating') ORDER BY id ASC",
+    [params.instituteName, params.createdByUsername]
+  );
+};
+
 export const updateEvaluationJob = async (params: {
   jobUuid: string;
   status?: EvaluationJobStatus;
@@ -343,6 +365,30 @@ export const cancelPendingOrEvaluatingItems = async (jobUuid: string) => {
     "UPDATE evaluation_job_item SET itemStatus = 'cancelled', recordUuid = '', errorMessage = '', updatedAt = datetime('now') WHERE evaluationJobUuid = ? AND itemStatus IN ('pending','evaluating')",
     [jobUuid]
   );
+};
+
+/** Cancel all pending jobs (not yet evaluating) for a given institute/user.
+ *  Returns the UUIDs of the cancelled jobs so the caller can clean up drafts. */
+export const cancelAllPendingJobs = async (params: {
+  instituteName: string;
+  createdByUsername: string;
+}): Promise<string[]> => {
+  const rows = await all<{ jobUuid: string }>(
+    "SELECT jobUuid FROM evaluation_job WHERE instituteName = ? AND createdByUsername = ? AND status = 'pending'",
+    [params.instituteName, params.createdByUsername]
+  );
+  if (rows.length === 0) return [];
+  const uuids = rows.map((r) => r.jobUuid);
+  const placeholders = uuids.map(() => "?").join(",");
+  await run(
+    `UPDATE evaluation_job SET status = 'cancelled', cancelRequested = 1, errorMessage = '已被更新的任务取代', updatedAt = datetime('now') WHERE jobUuid IN (${placeholders})`,
+    uuids
+  );
+  // Also cancel their items
+  for (const uuid of uuids) {
+    await cancelPendingOrEvaluatingItems(uuid);
+  }
+  return uuids;
 };
 
 const generateToken = () => {

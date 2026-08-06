@@ -70,6 +70,14 @@ type EvaluationJobRuntimeDeps = {
     instituteName: string;
     createdByUsername: string;
   }) => Promise<EvaluationJobRow | undefined>;
+  findNextPendingJob: (params: {
+    instituteName: string;
+    createdByUsername: string;
+  }) => Promise<EvaluationJobRow | undefined>;
+  listActiveEvaluationJobs: (params: {
+    instituteName: string;
+    createdByUsername: string;
+  }) => Promise<EvaluationJobRow[]>;
   updateEvaluationJob: (params: {
     jobUuid: string;
     status?: EvaluationJobStatus;
@@ -87,9 +95,21 @@ type EvaluationJobRuntimeDeps = {
   }) => Promise<void>;
   listPendingOrEvaluatingItems: (jobUuid: string) => Promise<EvaluationJobItemRow[]>;
   cancelPendingOrEvaluatingItems: (jobUuid: string) => Promise<void>;
+  cancelAllPendingJobs: (params: {
+    instituteName: string;
+    createdByUsername: string;
+  }) => Promise<string[]>;
 };
 
 export const createEvaluationJobRuntime = (deps: EvaluationJobRuntimeDeps) => {
+  // In-memory store: jobUuid → record draft(s).  Survives across jobs so the
+  // queue processor can retrieve the draft when it's time to evaluate.
+  const draftStore = new Map<
+    string,
+    | { type: "single"; draft: Omit<BaseRecordCreateRequest, "evaluationAsync" | "evaluationJobUuid"> }
+    | { type: "batch"; drafts: Array<Omit<BaseRecordCreateRequest, "evaluationAsync" | "evaluationJobUuid">> }
+  >();
+
   const requirePrincipalMatchingInstitute = (instituteName: string) => {
     deps.authSession.requireAuthenticated();
     const principal = deps.authSession.getPrincipal();
@@ -253,6 +273,11 @@ export const createEvaluationJobRuntime = (deps: EvaluationJobRuntimeDeps) => {
         errorMessage: reason
       });
     }
+    // Start the next queued job (FIFO) — fires after both success and failure.
+    const job = await deps.getEvaluationJobByUuid(jobUuid);
+    if (job) {
+      void startNextPendingJob(job.instituteName, job.createdByUsername);
+    }
   };
 
   const runBatchJob = async (
@@ -362,6 +387,31 @@ export const createEvaluationJobRuntime = (deps: EvaluationJobRuntimeDeps) => {
         errorMessage: reason
       });
     }
+    const job = await deps.getEvaluationJobByUuid(jobUuid);
+    const principal = { instituteName: job?.instituteName ?? "", username: job?.createdByUsername ?? "" };
+    if (principal.instituteName) {
+      void startNextPendingJob(principal.instituteName, principal.username);
+    }
+  };
+
+  /** Start the oldest pending job (FIFO queue) for this user/institute. */
+  const startNextPendingJob = async (instituteName: string, createdByUsername: string) => {
+    try {
+      const nextJob = await deps.findNextPendingJob({ instituteName, createdByUsername });
+      if (!nextJob) return;
+      const draft = draftStore.get(nextJob.jobUuid);
+      if (!draft) return;
+      draftStore.delete(nextJob.jobUuid);
+      if (draft.type === "single") {
+        void runSingleJob(nextJob.jobUuid, draft.draft);
+      } else {
+        void runBatchJob(nextJob.jobUuid, draft.drafts);
+      }
+    } catch (error) {
+      deps.emitShellOutput(`[eval-queue] startNextPendingJob error: ${
+        error instanceof Error ? error.message : String(error)
+      }`);
+    }
   };
 
   return {
@@ -369,12 +419,14 @@ export const createEvaluationJobRuntime = (deps: EvaluationJobRuntimeDeps) => {
       parsedRecord: SampleRecordRequestPayload
     ): Promise<SampleRecordResponsePayload> {
       const principal = requirePrincipalMatchingInstitute(parsedRecord.instituteName);
-      const active = await deps.findActiveEvaluationJob({
+
+      // Cancel all previously queued pending jobs — the latest request wins.
+      const cancelledUuids = await deps.cancelAllPendingJobs({
         instituteName: principal.instituteName,
-        createdByUsername: principal.username
+        createdByUsername: principal.username,
       });
-      if (active) {
-        throw new Error(SharedClientErrorMessage.conflict);
+      for (const uuid of cancelledUuids) {
+        draftStore.delete(uuid);
       }
 
       const jobUuid = randomUUID();
@@ -386,9 +438,19 @@ export const createEvaluationJobRuntime = (deps: EvaluationJobRuntimeDeps) => {
         status: "pending"
       });
       await deps.createEvaluationJobItems({ jobUuid, totalCount: 1 });
-      setImmediate(() => {
-        void runSingleJob(jobUuid, recordDraft);
+      draftStore.set(jobUuid, { type: "single", draft: recordDraft });
+
+      // Start immediately only if no other job is active; otherwise it queues
+      // and will be picked up when the current one finishes.
+      const active = await deps.findActiveEvaluationJob({
+        instituteName: principal.instituteName,
+        createdByUsername: principal.username
       });
+      // `active` is the newest pending/evaluating — if it is NOT this new
+      // job, something else is already running → wait.
+      if (!active || active.jobUuid === jobUuid) {
+        setImmediate(() => { void runSingleJob(jobUuid, recordDraft); });
+      }
       return buildPlaceholder(parsedRecord, jobUuid);
     },
 
@@ -396,12 +458,14 @@ export const createEvaluationJobRuntime = (deps: EvaluationJobRuntimeDeps) => {
       body: BatchEnqueueEvaluationJobRequest
     ): Promise<BatchEnqueueEvaluationJobResponse> {
       const principal = requirePrincipalMatchingInstitute(body.instituteName);
-      const active = await deps.findActiveEvaluationJob({
+
+      // Cancel all previously queued pending jobs — the latest request wins.
+      const cancelledUuids = await deps.cancelAllPendingJobs({
         instituteName: principal.instituteName,
-        createdByUsername: principal.username
+        createdByUsername: principal.username,
       });
-      if (active) {
-        throw new Error(SharedClientErrorMessage.conflict);
+      for (const uuid of cancelledUuids) {
+        draftStore.delete(uuid);
       }
 
       const jobUuid = randomUUID();
@@ -413,12 +477,17 @@ export const createEvaluationJobRuntime = (deps: EvaluationJobRuntimeDeps) => {
         status: "pending"
       });
       await deps.createEvaluationJobItems({ jobUuid, totalCount: drafts.length });
+      draftStore.set(jobUuid, { type: "batch", drafts });
 
       const shouldStart = body.evaluationJobStart !== false;
       if (shouldStart) {
-        setImmediate(() => {
-          void runBatchJob(jobUuid, drafts);
+        const active = await deps.findActiveEvaluationJob({
+          instituteName: principal.instituteName,
+          createdByUsername: principal.username
         });
+        if (!active || active.jobUuid === jobUuid) {
+          setImmediate(() => { void runBatchJob(jobUuid, drafts); });
+        }
       }
       return { jobUuid };
     },
@@ -441,14 +510,11 @@ export const createEvaluationJobRuntime = (deps: EvaluationJobRuntimeDeps) => {
       params: { instituteName: string }
     ): Promise<ActiveEvaluationJobsResponse> {
       const principal = requirePrincipalMatchingInstitute(params.instituteName);
-      const active = await deps.findActiveEvaluationJob({
+      const active = await deps.listActiveEvaluationJobs({
         instituteName: principal.instituteName,
         createdByUsername: principal.username
       });
-      if (!active) {
-        return { jobs: [] };
-      }
-      return { jobs: [await toResponse(active)] };
+      return { jobs: await Promise.all(active.map((j) => toResponse(j))) };
     },
 
     async cancelJob(params: { jobUuid: string }): Promise<BaseEvaluationJobStatusResponse> {
