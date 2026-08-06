@@ -155,6 +155,7 @@ export type EvaluationJobRow = {
   progressPercent: number;
   recordUuid: string;
   errorMessage: string;
+  generateHeatmap: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -182,10 +183,23 @@ export const ensureEvaluationJobTables = async () => {
       progressPercent INTEGER NOT NULL DEFAULT 0,\
       recordUuid TEXT NOT NULL DEFAULT '',\
       errorMessage TEXT NOT NULL DEFAULT '',\
+      generateHeatmap INTEGER NOT NULL DEFAULT 0,\
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),\
       updatedAt TEXT NOT NULL DEFAULT (datetime('now'))\
     );"
   );
+  // Migration for existing databases created before the column existed.
+  const evaluationJobColumns = await all<{ name: string }>(
+    "PRAGMA table_info(evaluation_job)"
+  );
+  const hasGenerateHeatmap = evaluationJobColumns.some(
+    (column) => column.name === "generateHeatmap"
+  );
+  if (!hasGenerateHeatmap) {
+    await run(
+      "ALTER TABLE evaluation_job ADD COLUMN generateHeatmap INTEGER NOT NULL DEFAULT 0"
+    );
+  }
   await run(
     "create table if not exists evaluation_job_item (\
       id INTEGER PRIMARY KEY AUTOINCREMENT,\
@@ -212,10 +226,11 @@ export const createEvaluationJob = async (params: {
   instituteName: string;
   createdByUsername: string;
   status: EvaluationJobStatus;
+  generateHeatmap?: number;
 }) => {
   await run(
-    "INSERT INTO evaluation_job (jobUuid, instituteName, createdByUsername, status, cancelRequested, progressPercent, recordUuid, errorMessage) VALUES (?,?,?,?,0,0,'','')",
-    [params.jobUuid, params.instituteName, params.createdByUsername, params.status]
+    "INSERT INTO evaluation_job (jobUuid, instituteName, createdByUsername, status, cancelRequested, progressPercent, recordUuid, errorMessage, generateHeatmap) VALUES (?,?,?,?,0,0,'','',?)",
+    [params.jobUuid, params.instituteName, params.createdByUsername, params.status, params.generateHeatmap ?? 0]
   );
   return getEvaluationJobByUuid(params.jobUuid);
 };

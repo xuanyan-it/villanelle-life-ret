@@ -15,6 +15,7 @@ type JobInfo = {
     jobUuid: string;
     status: string;
     progressPercent: number;
+    generateHeatmap?: boolean;
 };
 
 const QueuePopover = () => {
@@ -57,21 +58,27 @@ const QueuePopover = () => {
 
     const hasEvaluating = queueJobs.some((j) => j.status === "evaluating");
 
-    const label = (job: JobInfo) =>
-        job.status === "evaluating"
+    const label = (job: JobInfo) => {
+        if (job.generateHeatmap) {
+            return job.status === "evaluating"
+                ? `热力图生成中 ${job.progressPercent}%`
+                : "热力图等待中";
+        }
+        return job.status === "evaluating"
             ? `评估中 ${job.progressPercent}%`
             : "等待中";
+    };
 
     return (
         <Popover
             trigger="click"
             open={open}
             onOpenChange={setOpen}
-            title={`评估队列 · ${queueJobs.length}`}
+            title={`任务队列 · ${queueJobs.length}`}
             content={
                 <div style={{ minWidth: 220 }}>
                     {queueJobs.length === 0 ? (
-                        <Typography.Text type="secondary">暂无评估任务</Typography.Text>
+                        <Typography.Text type="secondary">暂无任务</Typography.Text>
                     ) : (
                         queueJobs.map((job, idx) => (
                             <div

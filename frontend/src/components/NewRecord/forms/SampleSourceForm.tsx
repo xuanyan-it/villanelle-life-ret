@@ -1,11 +1,12 @@
-import { InboxOutlined } from "@ant-design/icons";
-import type { FormInstance, FormProps, UploadProps } from "antd";
+import { DeleteOutlined, FileZipOutlined, InboxOutlined } from "@ant-design/icons";
+import type { FormInstance, FormProps, UploadFile, UploadProps } from "antd";
 import { Button, DatePicker, Flex, Form, Input, Radio, Upload } from "antd";
 import dayjs from "dayjs";
 import type { TFunction } from "i18next";
 import React from "react";
 import { Gender } from "../../../types";
 import type { SampleRecordFormItems } from "../newRecordTypes";
+import styles from "../new-record.module.css";
 
 type Props = {
   form: FormInstance;
@@ -19,7 +20,21 @@ type Props = {
 const normalizeUpload: UploadProps["onChange"] extends (info: infer T) => void ? (event: T) => unknown : never =
   (event: any) => event?.fileList?.slice(-1) ?? [];
 
-const SampleSourceForm: React.FC<Props> = ({ form, formItemLayout, items, onReset, onSubmit, t }) => (
+const formatFileSize = (bytes: number): string => {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "";
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+};
+
+const SampleSourceForm: React.FC<Props> = ({ form, formItemLayout, items, onReset, onSubmit, t }) => {
+  const fileList = Form.useWatch("slideFile", form) as UploadFile[] | undefined;
+  const selectedFile = fileList?.[0];
+  const handleRemoveFile = () => {
+    form.setFieldValue("slideFile", []);
+  };
+
+  return (
   <Form
     name="newRetRecord"
     form={form}
@@ -43,16 +58,36 @@ const SampleSourceForm: React.FC<Props> = ({ form, formItemLayout, items, onRese
       getValueFromEvent={normalizeUpload}
       rules={[{ required: true, message: t("newRecord_slideFile_required") }]}
     >
-      <Upload.Dragger
-        accept=".svs"
-        maxCount={1}
-        multiple={false}
-        beforeUpload={(file) => file.name.toLowerCase().endsWith(".svs") ? false : Upload.LIST_IGNORE}
-      >
-        <p className="ant-upload-drag-icon"><InboxOutlined /></p>
-        <p>{t("newRecord_slideFile_drag")}</p>
-        <p className="ant-upload-hint">{t("newRecord_slideFile_hint")}</p>
-      </Upload.Dragger>
+      {selectedFile ? (
+        <div className={styles.selected_file}>
+          <FileZipOutlined style={{ fontSize: 22, color: "#1677ff" }} />
+          <div className={styles.selected_file_meta}>
+            <div className={styles.selected_file_name}>{selectedFile.name}</div>
+            {selectedFile.size != null && (
+              <div className={styles.selected_file_size}>{formatFileSize(selectedFile.size)}</div>
+            )}
+          </div>
+          <Button
+            type="text"
+            danger
+            icon={<DeleteOutlined />}
+            title={t("newRecord_slideFile_remove")}
+            aria-label={t("newRecord_slideFile_remove")}
+            onClick={handleRemoveFile}
+          />
+        </div>
+      ) : (
+        <Upload.Dragger
+          accept=".svs"
+          maxCount={1}
+          multiple={false}
+          beforeUpload={(file) => file.name.toLowerCase().endsWith(".svs") ? false : Upload.LIST_IGNORE}
+        >
+          <p className="ant-upload-drag-icon"><InboxOutlined /></p>
+          <p>{t("newRecord_slideFile_drag")}</p>
+          <p className="ant-upload-hint">{t("newRecord_slideFile_hint")}</p>
+        </Upload.Dragger>
+      )}
     </Form.Item>
     <Form.Item name={items.patientGender.name} label={items.patientGender.label} labelAlign="left" rules={[{ required: true, message: t("newRecord_sampleSource_patientGender_warning") }]}>
       <Radio.Group optionType="button" buttonStyle="solid" block>
@@ -133,6 +168,7 @@ const SampleSourceForm: React.FC<Props> = ({ form, formItemLayout, items, onRese
       </Flex>
     </Form.Item>
   </Form>
-);
+  );
+};
 
 export default SampleSourceForm;

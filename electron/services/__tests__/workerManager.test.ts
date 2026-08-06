@@ -157,4 +157,50 @@ describe("createWorkerManager", () => {
       "[worker#0] ready failed: load failed",
     );
   });
+
+  test("lazily spawns workers on first request when configured", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const manager = createWorkerManager({
+      onReady: vi.fn(),
+      emitShellOutput: vi.fn(),
+    });
+    manager.configure({
+      command: "python",
+      args: ["-u", "worker.py"],
+      count: 1,
+    });
+
+    // No worker is running before the first request.
+    expect(mockSpawn).not.toHaveBeenCalled();
+
+    const requestPromise = manager.request(
+      { slidePath: "x.svs" },
+      undefined,
+      "slide-info",
+    );
+
+    // The first request triggers the lazy spawn.
+    expect(mockSpawn).toHaveBeenCalled();
+    proc.emit("spawn");
+    feedLine(proc, { type: "ready", ok: true });
+    await tick();
+
+    expect(proc.stdin.write).toHaveBeenCalledTimes(1);
+    const sentPayload = String(proc.stdin.write.mock.calls[0][0]);
+    expect(sentPayload).toContain('"cmd":"slide-info"');
+
+    feedLine(proc, {
+      id: "1",
+      ok: true,
+      result: JSON.stringify({ width: 100, height: 200 }),
+    });
+    await expect(requestPromise).resolves.toBe(
+      JSON.stringify({ width: 100, height: 200 }),
+    );
+
+    // A second request reuses the already-running pool.
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+  });
 });

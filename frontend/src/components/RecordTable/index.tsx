@@ -18,7 +18,6 @@ import {
   Row,
   Select,
   Space,
-  Spin,
   Tabs,
   Tag,
   Typography,
@@ -31,6 +30,7 @@ import { api } from "../../api";
 import OpenSeadragon from "openseadragon";
 import { isElectronRuntime as detectElectronRuntime } from "../../platform/runtime";
 import { SvsViewer } from "../SvsViewer";
+import { LoadingState } from "../LoadingState";
 import type { AppDispatch, RootState } from "../../store";
 import { fetchUserListAsync, getUserList } from "../../store/admin";
 import { pushNotification } from "../../store/notification";
@@ -240,12 +240,7 @@ const HeatmapOsdViewer = ({ src, loading, regenerating, onRegenerate }: {
   }, [src]);
 
   if (loading) {
-    return (
-      <Flex vertical align="center" justify="center" style={{ height: "100%", background: "#111" }} gap={12}>
-        <Spin size="large" />
-        <Typography.Text style={{ color: "#ccc" }}>正在加载热力图…</Typography.Text>
-      </Flex>
-    );
+    return <LoadingState label="正在加载热力图…" />;
   }
 
   if (!src) {
@@ -363,30 +358,39 @@ const RecordTable = () => {
     }
   }, []);
 
+  // Called when the heatmap regeneration job reaches a terminal state —
+  // stops polling, clears the "generating" flag and reloads the heatmap.
+  const finishHeatmapWait = useCallback(() => {
+    heatmapWaitUuidRef.current = null;
+    clearHeatmapPoll();
+    setHeatmapGenerating(false);
+    setRegeneratingHeatmap(false);
+    setHeatmapPollSeconds(0);
+    if (detailUploadId) {
+      api.heatmapSource(detailUploadId)
+        .then((src) => setHeatmapSrc(src))
+        .catch(() => {});
+    }
+  }, [clearHeatmapPoll, detailUploadId]);
+
   // Subscribe to evaluationResponse — fires when the worker finishes
   // evaluation (including heatmap generation).  Refresh heatmap on match.
+  // The emitted record carries the freshly-inserted uuid, so match on the
+  // uploadId (which is stable for the record whose heatmap we regenerated).
   useEffect(() => {
     if (!isElectronRuntime) return;
     const unsub = (window as any).electronAPI?.evaluationResponse?.(
       (record: SampleRecordResponsePayload) => {
         if (
           heatmapWaitUuidRef.current &&
-          record.uuid === heatmapWaitUuidRef.current
+          record.uploadId === detailUploadId
         ) {
-          heatmapWaitUuidRef.current = null;
-          setHeatmapGenerating(false);
-          clearHeatmapPoll();
-          // Reload heatmap source
-          if (detailUploadId) {
-            api.heatmapSource(detailUploadId)
-              .then((src) => setHeatmapSrc(src))
-              .catch(() => {});
-          }
+          finishHeatmapWait();
         }
       },
     );
     return () => { unsub?.(); };
-  }, [clearHeatmapPoll, detailUploadId, isElectronRuntime]);
+  }, [finishHeatmapWait, detailUploadId, isElectronRuntime]);
   const showDeletedOnly = useSelector((state: RootState) =>
     getDeletedOnly(state),
   );
@@ -577,6 +581,7 @@ const RecordTable = () => {
         evaluationAsync: true,
       } as any);
       const jobUuid = (result as any)?.uuid;
+      heatmapWaitUuidRef.current = jobUuid;
       let lastPct = 0;
       // Poll job status for real progress percentage.
       heatmapPollRef.current = setInterval(async () => {
@@ -586,6 +591,16 @@ const RecordTable = () => {
           const pct = s?.progressPercent ?? lastPct;
           lastPct = pct;
           setHeatmapPollSeconds(pct);
+          // Terminal state → the job finished.  Stop polling and reload
+          // the heatmap (otherwise the panel would stay on "生成中" forever
+          // even though the queue is already empty).
+          if (
+            s?.status === "succeeded" ||
+            s?.status === "failed" ||
+            s?.status === "cancelled"
+          ) {
+            finishHeatmapWait();
+          }
         } catch { /* keep last known pct */ }
       }, 2000);
       dispatch(pushNotification({
@@ -1210,6 +1225,7 @@ const RecordTable = () => {
           </Col>
           <Col xs={24} lg={9}>
             <div style={{
+              position: "relative",
               background: "#111",
               borderRadius: "6px",
               overflow: "hidden",
@@ -1224,14 +1240,11 @@ const RecordTable = () => {
               ) : heatmapSrc ? (
                 <HeatmapOsdViewer src={heatmapSrc} loading={false} regenerating={false} />
               ) : heatmapChecking || heatmapGenerating ? (
-                <Flex vertical align="center" justify="center" style={{ height: "100%" }} gap={12}>
-                  <Spin size="large" />
-                  <Typography.Text style={{ color: "#ccc" }}>
-                    {heatmapGenerating
-                      ? `热力图生成中… ${heatmapPollSeconds}%`
-                      : "正在加载热力图…"}
-                  </Typography.Text>
-                </Flex>
+                <LoadingState
+                  label={heatmapGenerating
+                    ? `热力图生成中… ${heatmapPollSeconds}%`
+                    : "正在加载热力图…"}
+                />
               ) : (
                 <Flex vertical align="center" justify="center" style={{ height: "100%" }} gap={12}>
                   <Typography.Text style={{ color: "#ccc" }}>{t("recordTable_geneInfo_heatmapUnavailable")}</Typography.Text>

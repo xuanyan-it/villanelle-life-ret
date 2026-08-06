@@ -44,6 +44,7 @@ import {
   NewMissionType,
 } from "../../types";
 import DraggableModal from "../DraggableModal";
+import { LoadingState } from "../LoadingState";
 import { SvsViewer } from "../SvsViewer";
 import SampleSourceForm from "./forms/SampleSourceForm";
 /* styles */
@@ -106,6 +107,7 @@ const NewRecord: React.FC = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadingFileName, setUploadingFileName] = useState("");
   const [reviewUploadId, setReviewUploadId] = useState<string | null>(null);
+  const [reviewUploadFailed, setReviewUploadFailed] = useState(false);
   // tab and form
   const [sampleSourceFormRef] = Form.useForm();
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
@@ -128,6 +130,7 @@ const NewRecord: React.FC = () => {
     setFormData({ ...initialFormData });
     setPendingFormData(null);
     setReviewUploadId(null);
+    setReviewUploadFailed(false);
     resetImport();
     if (resetForms) {
       sampleSourceFormRef.resetFields();
@@ -151,6 +154,7 @@ const NewRecord: React.FC = () => {
       if (uploadFile) {
         setUploadingFileName(uploadFile.name);
         setReviewUploadId(null);
+        setReviewUploadFailed(false);
         try {
           const resumeKey = `ret-svs-upload:${uploadFile.name}:${uploadFile.size}:${uploadFile.lastModified}`;
           let upload: UploadState | null = null;
@@ -192,6 +196,7 @@ const NewRecord: React.FC = () => {
           setReviewUploadId(upload.uploadId);
         } catch {
           console.warn("[NewRecord] background upload for preview failed");
+          setReviewUploadFailed(true);
         }
       }
     } catch (error) {}
@@ -445,8 +450,20 @@ const NewRecord: React.FC = () => {
                 </Flex>
               </Col>
               <Col xs={24} md={14} lg={15}>
-                <div style={{ height: "100%", minHeight: 520, borderRadius: 6, overflow: "hidden", border: "1px solid #d9d9d9" }}>
-                  <SvsViewer uploadId={reviewUploadId} />
+                <div style={{ height: "100%", minHeight: 520, borderRadius: 6, overflow: "hidden", border: "1px solid #d9d9d9", position: "relative" }}>
+                  {reviewUploadId ? (
+                    <SvsViewer uploadId={reviewUploadId} />
+                  ) : reviewUploadFailed ? (
+                    <div className={styles.review_preview_error}>
+                      <span>{t("newRecord_preview_uploadFailed")}</span>
+                      <Button onClick={() => setCurrentStep(0)}>{t("newRecord_previous")}</Button>
+                    </div>
+                  ) : (
+                    <LoadingState
+                      label={t("newRecord_fileUploading", { percent: uploadProgress })}
+                      sublabel={t("newRecord_fileUploadHint")}
+                    />
+                  )}
                 </div>
               </Col>
             </Row>

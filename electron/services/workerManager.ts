@@ -40,6 +40,15 @@ type WorkerManagerOptions = {
   emitShellOutput: (payload: unknown) => void;
 };
 
+/** Startup configuration remembered so workers can be spawned lazily on first use. */
+type WorkerStartConfig = {
+  command: string;
+  args: string[];
+  count?: number;
+  tileCommand?: string;
+  tileArgs?: string[];
+};
+
 /** Worker pool size — override with RET_WORKER_COUNT (default 3). */
 const resolveWorkerCount = () => {
   const raw = process.env.RET_WORKER_COUNT?.trim();
@@ -57,6 +66,7 @@ export const createWorkerManager = ({
   const logger = getElectronLogger();
   const workers: WorkerSlot[] = [];
   let slotPointer = 0;
+  let startConfig: WorkerStartConfig | null = null;
 
   const createSlot = (index: number, role: "predict" | "tile"): WorkerSlot => ({
     index,
@@ -347,6 +357,7 @@ export const createWorkerManager = ({
     tileCommand?: string,
     tileArgs?: string[],
   ) => {
+    startConfig = { command, args, count, tileCommand, tileArgs };
     if (workers.length > 0) {
       return;
     }
@@ -404,11 +415,32 @@ export const createWorkerManager = ({
     return slot;
   };
 
+  const ensureStarted = async () => {
+    if (workers.length > 0) {
+      return;
+    }
+    if (!startConfig) {
+      throw new Error("worker manager not configured");
+    }
+    await start(
+      startConfig.command,
+      startConfig.args,
+      startConfig.count,
+      startConfig.tileCommand,
+      startConfig.tileArgs,
+    );
+  };
+
+  const configure = (config: WorkerStartConfig) => {
+    startConfig = config;
+  };
+
   const request = async (
     payload: Record<string, string | boolean | number>,
     onProgress?: (progress: { pct: number; step: string }) => void,
     cmd = "predict",
   ): Promise<string | Buffer> => {
+    await ensureStarted();
     if (cmd === "predict") {
       const primary = workers.find((w) => w.index === 0);
       if (primary) {
@@ -462,6 +494,7 @@ export const createWorkerManager = ({
     ensureReady,
     stop,
     getReadyMessage,
+    configure,
   };
 };
 

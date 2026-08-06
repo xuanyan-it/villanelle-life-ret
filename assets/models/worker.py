@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import traceback
 from pathlib import Path
 
@@ -459,6 +460,25 @@ def _parse_bool(value: object) -> bool:
     return False
 
 
+def _wait_for_slide_file(slide_path: str, timeout: float = 10.0) -> bool:
+    """Wait for the slide file to become visible to this process.
+
+    Electron requests slide-info / extract-tile immediately after an upload
+    completes.  On portable/USB storage the freshly renamed file may take a
+    moment to become visible to worker processes, so retry briefly instead of
+    failing a request whose file is guaranteed to exist.
+    """
+    if not slide_path:
+        return False
+    deadline = time.monotonic() + timeout
+    while True:
+        if os.path.isfile(slide_path):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.25)
+
+
 def _persistent_heatmap_path(slide_path: str) -> Path:
     return Path(slide_path).resolve().parent.parent / "output" / "heatmap.png"
 
@@ -480,7 +500,7 @@ def handle_predict(msg: dict) -> None:
     generate_heatmap = _parse_bool(generate_heatmap_raw)
     upload_id = str(msg.get("uploadId", ""))
 
-    if not slide_path or not os.path.isfile(slide_path):
+    if not _wait_for_slide_file(slide_path):
         write_line({"id": msg_id, "ok": False, "error": f"slide file not found: {slide_path}"})
         return
 
@@ -639,7 +659,7 @@ def handle_slide_info(msg: dict) -> None:
     msg_id = str(msg.get("id", ""))
     slide_path = msg.get("slidePath", "")
 
-    if not slide_path or not os.path.isfile(slide_path):
+    if not _wait_for_slide_file(slide_path):
         write_line({"id": msg_id, "ok": False, "error": f"slide file not found: {slide_path}"})
         return
 
@@ -683,7 +703,7 @@ def handle_extract_tile(msg: dict) -> None:
     scale_factor = float(msg.get("scaleFactor", 0) or 0)
     real_downsample = float(msg.get("realDownsample", 0) or 0)
 
-    if not slide_path or not os.path.isfile(slide_path):
+    if not _wait_for_slide_file(slide_path):
         write_line({"id": msg_id, "ok": False, "error": f"slide file not found: {slide_path}"})
         return
 

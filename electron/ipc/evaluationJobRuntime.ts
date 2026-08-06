@@ -59,6 +59,7 @@ type EvaluationJobRuntimeDeps = {
     instituteName: string;
     createdByUsername: string;
     status: EvaluationJobStatus;
+    generateHeatmap?: number;
   }) => Promise<EvaluationJobRow | undefined>;
   createEvaluationJobItems: (params: {
     jobUuid: string;
@@ -133,6 +134,7 @@ export const createEvaluationJobRuntime = (deps: EvaluationJobRuntimeDeps) => {
       progressPercent: Number(jobRow.progressPercent ?? 0),
       recordUuid: jobRow.recordUuid ?? "",
       errorMessage: jobRow.errorMessage ?? "",
+      generateHeatmap: Boolean(jobRow.generateHeatmap),
       items: items.map((it) => ({
         itemSeqNo: Number(it.itemSeqNo),
         itemStatus: it.itemStatus,
@@ -435,7 +437,8 @@ export const createEvaluationJobRuntime = (deps: EvaluationJobRuntimeDeps) => {
         jobUuid,
         instituteName: recordDraft.instituteName,
         createdByUsername: principal.username,
-        status: "pending"
+        status: "pending",
+        generateHeatmap: recordDraft.generateHeatmap ? 1 : 0
       });
       await deps.createEvaluationJobItems({ jobUuid, totalCount: 1 });
       draftStore.set(jobUuid, { type: "single", draft: recordDraft });
@@ -474,7 +477,8 @@ export const createEvaluationJobRuntime = (deps: EvaluationJobRuntimeDeps) => {
         jobUuid,
         instituteName: body.instituteName,
         createdByUsername: principal.username,
-        status: "pending"
+        status: "pending",
+        generateHeatmap: drafts.some((d) => d.generateHeatmap) ? 1 : 0
       });
       await deps.createEvaluationJobItems({ jobUuid, totalCount: drafts.length });
       draftStore.set(jobUuid, { type: "batch", drafts });

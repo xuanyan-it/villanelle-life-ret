@@ -26,6 +26,7 @@ import { Switch } from "antd";
 
 import styles from "./SvsViewer.module.css";
 import { isElectronRuntime } from "../../platform/runtime";
+import { LoadingState } from "../LoadingState";
 import {
   buildWebTileSource,
   buildNativeTileSource,
@@ -318,15 +319,10 @@ export const SvsViewer = forwardRef<SvsViewerHandle, SvsViewerProps>(
     return (
       <div className={`${styles.container} ${className ?? ""}`}>
         {isLoading && (
-          <div className={styles.overlay}>
-            <div className={styles.spinner} />
-            <span className={styles.overlayText}>正在加载切片预览…</span>
-            {dimensions && (
-              <span className={styles.overlayText}>
-                {dimensions.w} × {dimensions.h}
-              </span>
-            )}
-          </div>
+          <LoadingState
+            label="正在加载切片预览…"
+            sublabel={dimensions ? `${dimensions.w} × ${dimensions.h}` : undefined}
+          />
         )}
 
         {status === "error" && (

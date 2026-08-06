@@ -85,6 +85,9 @@ export const BaseEvaluationJobStatusResponseSchema = z.object({
   progressPercent: z.number().int().min(0).max(100),
   recordUuid: z.string(),
   errorMessage: z.string(),
+  // 该任务是否包含热力图生成（用于前端任务队列区分“热力图生成中/评估中”）。
+  // optional+default 保证旧后端/旧响应不携带该字段时依然可解析。
+  generateHeatmap: z.boolean().optional().default(false),
   items: z.array(BaseEvaluationJobItemStatusSchema)
 });
 

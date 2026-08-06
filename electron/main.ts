@@ -85,46 +85,6 @@ const initAuthTables = async () => {
   }
 };
 
-const prewarmWorkerAfterLogin = async (
-  hasRuntimePython: boolean,
-  pythonExePath: string,
-  workerScriptPath: string,
-  envLabel: "dev" | "prod",
-) => {
-  if (!hasRuntimePython) {
-    const message = `[paths:${envLabel}] runtime python not found: ${pythonExePath}`;
-    logger.error(message);
-    emitShellOutput(message);
-    return;
-  }
-  if (!fs.existsSync(workerScriptPath)) {
-    const message = `[paths:${envLabel}] worker.py not found: ${workerScriptPath}`;
-    logger.error(message);
-    emitShellOutput(message);
-    return;
-  }
-
-  try {
-    await workerManager.start(
-      workerCommand,
-      workerArgs,
-      undefined,
-      tileWorkerCommand,
-      tileWorkerArgs,
-    );
-    await workerManager.ensureReady(2100000);
-  } catch (error) {
-    logger.warn("[worker] start failed", {
-      error: error instanceof Error ? error.message : String(error)
-    });
-    emitShellOutput(
-      `[worker] start failed: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-  }
-};
-
 const createWindow = () => {
   const t0 = nowMs();
   logger.info("[boot] createWindow start", { elapsedMs: t0 - appStartMs });
@@ -162,7 +122,6 @@ const createWindow = () => {
     modelRoot,
     pythonExePath,
     workerScriptPath,
-    hasRuntimePython,
   } = resolveRuntimePaths(NODE_ENV);
   // Production/portable: uploads live inside model/ (model/uploads) so the root
   // next to the exe only contains the exe and db.db.
@@ -202,6 +161,15 @@ const createWindow = () => {
   tileWorkerCommand = pythonExePath;
   tileWorkerArgs = ["-u", workerScriptPath, "--tile-only"];
 
+  // Remember the launch config so workers are spawned lazily on first use
+  // (e.g. opening a slide or starting an evaluation) instead of at login.
+  workerManager.configure({
+    command: workerCommand,
+    args: workerArgs,
+    tileCommand: tileWorkerCommand,
+    tileArgs: tileWorkerArgs,
+  });
+
   attachRendererBootstrap({
     mainWindow,
     nowMs,
@@ -240,15 +208,6 @@ const createWindow = () => {
     onLogout: () => {
       authSession.clear();
     },
-    onLoginSuccess: () =>
-      {
-        return prewarmWorkerAfterLogin(
-          hasRuntimePython,
-          pythonExePath,
-          workerScriptPath,
-          envLabel,
-        );
-      },
   });
 };
 
